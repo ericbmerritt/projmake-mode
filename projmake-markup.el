@@ -35,8 +35,9 @@
 (defun projmake-delete-overlays (project)
   "Delete all overlays in the project"
   (dolist (ol (projmake-project-overlays project))
-    (delete-overlay ol))
-  (setf (projmake-project-overlays nil)))
+    (when ol
+      (delete-overlay ol)))
+  (setf (projmake-project-overlays project) nil))
 
 (defun projmake-highlight-err-lines (project)
   "Highlight error lines in BUFFER using info from project-error-info"
@@ -50,7 +51,7 @@ Perhaps use text from line-error to enhance highlighting."
   (let ((buffer (get-file-buffer (projmake-error-info-file line-error))))
     (when buffer
       (with-current-buffer buffer
-        (goto-char (point-min))
+        (goto-line (projmake-error-info-line line-error))
 
         (let* ((line-beg (projmake-line-beginning-position))
                (line-end (projmake-line-end-position))
@@ -65,9 +66,9 @@ Perhaps use text from line-error to enhance highlighting."
               (setq face 'projmake-errline)
             (setq face 'projmake-warnline))
 
-          (push
-           (projmake-make-overlay beg end tooltip-text face nil)
-           (projmake-project-overlays project)))))))
+          (projmake-add-overlay project
+                                line-beg line-end tooltip-text face nil))))))
+
 
 (defun projmake-util-attr (face str)
   "add some properties to a text string and return it"
@@ -78,14 +79,14 @@ Perhaps use text from line-error to enhance highlighting."
   "Check if region specified by BEG and END has overlay.
 Return t if it has at least one projmake overlay, nil if no overlay."
   (let ((ovs (overlays-in beg end)))
-    (find-first 'projmake-overlay-p ovs)))
+    (projmake-find-first 'projmake-overlay-p ovs)))
 
 (defun projmake-overlay-p (ov)
   "Determine whether overlay OV was created by projmake."
   (and (overlayp ov)
        (overlay-get ov 'projmake-overlay)))
 
-(defun projmake-make-overlay (beg end tooltip-text face mouse-face)
+(defun projmake-add-overlay (project beg end tooltip-text face mouse-face)
   "Allocate a projmake overlay in range BEG and END."
   (when (not (projmake-region-has-projmake-overlays beg end))
     (let ((ov (make-overlay beg end nil t t)))
@@ -94,9 +95,11 @@ Return t if it has at least one projmake overlay, nil if no overlay."
       (overlay-put ov 'help-echo tooltip-text)
       (overlay-put ov 'projmake-overlay t)
       (overlay-put ov 'priority 100)
+      (overlay-put ov 'evaporate t)
       (overlay-put ov 'after-string
-                   (projmake-util-attr face (concat " <--- " tooltip-text)))
+                   (projmake-util-attr face (concat " <@--- " tooltip-text)))
       (projmake-log PROJMAKE-DEBUG "created an overlay at (%d-%d)" beg end)
-      ov)))
+
+      (push ov (projmake-project-overlays project)))))
 
 (provide 'projmake-markup)

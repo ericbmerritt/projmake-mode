@@ -30,8 +30,17 @@ If LEVEL is higher than `projmake-log-level', the message is
 ignored.  Otherwise, it is printed using `message'.
 TEXT is a format control string, and the remaining arguments ARGS
 are the string substitutions (see `format')."
-  (if (<= level projmake-log-level)
-      (let* ((msg (apply 'format text args)))
-        (message "%s" msg))))
+  (when (<= level projmake-log-level)
+    (let* ((msg (apply 'format text args)))
+      (message "%s" msg))))
+
+(defun projmake-find-first (function items)
+  "Return the first non-nil value that function returns"
+  (catch 'break
+    (dolist (el items)
+      (let ((result (funcall function el)))
+        (when result
+          (throw 'break result))))))
+
 
 (provide 'projmake-util)

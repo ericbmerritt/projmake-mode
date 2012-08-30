@@ -25,14 +25,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
 
-(defface flymake-errline
-  '((((class color) (background dark)) (:background "Firebrick4"))
-    (((class color) (background light)) (:background "LightPink"))
+(defface projmake-errline
+  '((((class color) (background dark)) (:background "Firebrick4" :italic))
+    (((class color) (background light)) (:background "LightPink" :italic))
     (t (:bold t)))
   "Face used for marking error lines."
   :group 'projmake)
 
-(defface flymake-warnline
+(defface projmake-warnline
   '((((class color) (background dark)) (:background "DarkBlue"))
     (((class color) (background light)) (:background "LightBlue2"))
     (t (:bold t)))
@@ -63,16 +63,53 @@ of each project"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
 
-(setq projmake-log-level PROJMAKE-DEBUG)
+(define-minor-mode projmake-mode
+  "Toggle projmake-mode
+
+   enables or disables the mode"
+
+      ;; The initial value.
+      nil
+      ;; The indicator for the mode line.
+      " Projmake"
+      ;; The minor mode bindings.
+      '(([C-backspace] . projmake-toggle))
+      :group 'projmake
+      (make-local-variable 'projmake-toggled)
+      (projmake-on))
+
+(defun projmake-toggle ()
+  "Togle projmake on or off depending on what projmake-toggle is set to"
+  (interactive)
+  (if projmake-toggled
+      (projmake-off)
+    (projmake-on)))
+
+(defun projmake-on ()
+  "Turn projmake building on for a buffer"
+  (interactive)
+  (setq projmake-toggled t)
+  (add-hook 'after-save-hook 'projmake-buildable-event
+            t 'local)) ;Only in the current buffer
+
+(defun projmake-off ()
+  "Turn projmake off "
+  (interactive)
+  (projmake-delete-overlays
+   (projmake-find-project-by-buffer (current-buffer)))
+  (setq projmake-toggled nil)
+  (remove-hook 'after-save-hook 'projmake-buildable-event
+               'local)) ;Only in the current buffer
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Project list management
+;; Project Management
 (defvar projmake-projects nil
   "This is where all the active projects currently loaded are
 stored")
 
 (defun projmake-add-to-projects (prj)
-  "Adds a project to the project list only if that project does not
+   "Adds a project to the project list only if that project does not
 already exist. Where existance is indicated by the full path of the
 projmake file."
   (let ((file (projmake-project-file prj)))
@@ -87,9 +124,13 @@ projmake file."
 associated with this buffer. The buffer related projet is defined
 as anything under the directory where the project configuration
 file exists."
+  (projmake-log PROJMAKE-DEBUG "Looking for project for file: %s" file)
   (cdr (find-if (lambda (prj-kv)
-                  (let ((prj (cdr prj-kv)))
-                    (string< (projmake-project-dir prj) file)))
+                  (let* ((prj (cdr prj-kv))
+                        (projmake-dir (projmake-project-dir prj)))
+                    (eql t (compare-strings projmake-dir
+                                            0 nil
+                                            file 0 (length projmake-dir)))))
                 projmake-projects)))
 
 (defun projmake-find-project-by-buffer (buffer)
@@ -107,9 +148,9 @@ specified by projmake-project-file-name, usually 'projmake'. When
 it finds that file it loades it using projmake-add-project"
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
-                 (project-dir (locate-dominating-file dirname projmake-project-file-name)))
+         (project-dir (locate-dominating-file dirname projmake-project-file-name)))
     (if project-dir
-        (projmakeadd-project (concat project-dir projmake-project-file-name))
+        (projmake-add-project (concat project-dir projmake-project-file-name))
       nil)))
 
 (defun projmake-eval-project-file (file)
@@ -123,8 +164,6 @@ involved."
     (goto-char (point-min))
     (eval `(labels
                ((projmake
-
-
                  (&rest args)
                  (apply (function projmake-prj) ,file args)))
              ,(read (current-buffer))))))
@@ -190,7 +229,7 @@ almost always just a save). It will do the 'rigth thing' for the
 build."
   (interactive)
   (let ((project
-                 (projmake-find-project-by-buffer (current-buffer))))
+         (projmake-find-project-by-buffer (current-buffer))))
     (if project
         (if (projmake-project-build? project)
             (projmake-build-when project)
@@ -202,7 +241,7 @@ build."
 (defun projmake-start-build-process (project)
   "Start syntax check process."
   (let* ((process nil)
-         (dir (projmake-project-dir project))
+         (default-directory (projmake-project-dir project))
          (shell-cmd (projmake-project-shell project))
          (ctx-proc-filter (lambda (proc output)
                             (projmake-process-filter project proc output)))
@@ -210,8 +249,10 @@ build."
                               (projmake-process-sentinel project proc event))))
     (condition-case err
         (progn
-              (projmake-log 3 "starting projmake process on dir %s" dir)
+          (projmake-log PROJMAKE-DEBUG "starting projmake process (%s) on dir %s"
+                        shell-cmd default-directory)
           (setq process (apply 'start-process-shell-command
+                               (projmake-make-process-name project)
                                (projmake-make-process-name project)
                                shell-cmd))
           (set-process-sentinel process ctx-proc-sentinel)
@@ -224,7 +265,7 @@ build."
 
           (projmake-log PROJMAKE-INFO "started process %d, command=%s, dir=%s"
                         (process-id process) (process-command process)
-                        dir)
+                        default-directory)
           process)
       (error
        (let* ((err-str (format "Failed to launch syntax check process '%s' with args %s"
@@ -235,7 +276,6 @@ build."
   "Parse OUTPUT and highlight error lines.
 It's flymake process filter."
   (let ((source-buffer (process-buffer process)))
-
     (projmake-log PROJMAKE-DEBUG "received %d byte(s) of output from process %d"
                   (length output) (process-id process))
     (when (buffer-live-p source-buffer)
@@ -259,21 +299,25 @@ It's flymake process filter."
                                    projmake-processes))
             (when (buffer-live-p source-buffer)
               (with-current-buffer source-buffer
-                  (projmake-parse-residual project)
-                  (projmake-post-build exit-status)
-                  (setf (projmake-project-is-building? project) nil))))
+                (projmake-parse-residual project)
+                (projmake-post-build project)
+                (setf (projmake-project-is-building? project) nil))))
         (error
          (let ((err-str (format "Error in process sentinel for buffer %s: %s"
                                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
+      (kill-buffer source-buffer)
       (projmake-cleanup-project project)
       (when (projmake-project-build-again? project)
         (setf (projmake-project-build-again? project) nil)
         (projmake-build-when project)))))
 
 (defun projmake-post-build (project)
+  (projmake-log PROJMAKE-DEBUG "-->11")
   (projmake-delete-overlays project)
+  (projmake-log PROJMAKE-DEBUG "-->15")
   (projmake-highlight-err-lines project)
+  (projmake-log PROJMAKE-DEBUG "-->22")
   (projmake-log PROJMAKE-INFO "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-get-err-count project "e")

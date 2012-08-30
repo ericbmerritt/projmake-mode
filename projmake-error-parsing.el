@@ -23,10 +23,9 @@
   file line type text)
 
 (defun projmake-get-err-count (project type)
-
   "Return number of errors of specified TYPE for ERR-INFO-LIST."
   (let* ((error-info-list (projmake-project-error-info project))
-         (count (length err-info-list))
+         (count (length error-info-list))
          (err-count 0))
     (dolist (err error-info-list)
       (when (string-equal type (projmake-error-info-type err))
@@ -41,7 +40,7 @@
               (projmake-parse-err-lines
                (projmake-project-error-info project)
                (list output-residual)))
-      (setf (projmake-project-error-info project) nil))))
+      (setf (projmake-project-residual project) nil))))
 
 (defun projmake-parse-output-and-residual (project output)
   "Split OUTPUT into lines, merge in residual if necessary."
@@ -58,7 +57,7 @@
 (defun projmake-split-output (output)
   "Split OUTPUT into lines.
 Return last one as residual if it does not end with newline char.
-Returns ((LINES) RESIDUAL)."
+Returns ((LINES) PESIDUAL)."
   (when (and output (> (length output) 0))
     (let* ((lines (split-string output "[\n\r]+"))
            (complete (equal "\n" (char-to-string (aref output (1- (length output))))))
@@ -70,13 +69,14 @@ Returns ((LINES) RESIDUAL)."
 
 (defun projmake-parse-err-lines (err-info-list lines)
   "Parse err LINES, store info in ERR-INFO-LIST."
-  (let (acc)
+  (let ((acc err-info-list))
     (dolist (line lines acc)
       (let ((line-err-info (projmake-parse-line line)))
         (projmake-log PROJMAKE-DEBUG "parsed '%s', %s line-err-info"
                       line (if line-err-info "got" "no"))
         (when line-err-info
-          (push line-err-info acc))))))
+          (push line-err-info acc))))
+    acc))
 
 (defun projmake-reformat-err-line-patterns-from-compile-el (original-list)
   "Grab error line patterns from ORIGINAL-LIST in compile.el format.
@@ -154,7 +154,7 @@ error-info struct if successful and nil if not"
 
           (setq err-text
                 (if (> (length pattern-list) 4)
-                    (match-string (nth 4 pattern) line)
+                    (match-string (nth 4 pattern-list) line)
                   nil))
 
           (unless err-text
@@ -168,17 +168,18 @@ error-info struct if successful and nil if not"
                                  "line=%s text=%s")
                         file-idx line-idx
                         raw-file-name line-no err-text)
-          (make-projmake-error-info raw-file-name line-no err-type err-text)))
-    nil))
+          (make-projmake-error-info :file raw-file-name
+                                    :line line-no
+                                    :type err-type
+                                    :text err-text))
+      nil)))
 
 (defun projmake-parse-line (line)
   "Parse LINE to see if it is an error or warning.
 Return its components if so, nil otherwise."
-  (catch 'break
-    (dolist (pattern-list projmake-err-line-patterns)
-      (let ((result (projmake-apply-pattern pattern-list line)))
-        (when result
-          (throw 'break result))))))
+  (projmake-find-first #'(lambda (pattern-list)
+                          (projmake-apply-pattern pattern-list line))
+                       projmake-err-line-patterns))
 
 (defun projmake-patch-err-text (string)
   (if (string-match "^[\n\t :0-9]*\\(.*\\)$" string)
