@@ -313,11 +313,8 @@ It's flymake process filter."
         (projmake-build-when project)))))
 
 (defun projmake-post-build (project)
-  (projmake-log PROJMAKE-DEBUG "-->11")
   (projmake-delete-overlays project)
-  (projmake-log PROJMAKE-DEBUG "-->15")
   (projmake-highlight-err-lines project)
-  (projmake-log PROJMAKE-DEBUG "-->22")
   (projmake-log PROJMAKE-INFO "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-get-err-count project "e")
