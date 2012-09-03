@@ -48,8 +48,10 @@
 (defun projmake-highlight-line (project line-error)
   "Highlight line LINE-NO in current buffer.
 Perhaps use text from line-error to enhance highlighting."
-  (let ((buffer (get-file-buffer (projmake-error-info-file line-error))))
+  (let* ((error-file (projmake-error-info-file line-error))
+         (buffer (get-file-buffer error-file)))
     (when buffer
+      (projmake-log PROJMAKE-DEBUG "Got buffer for error file %s" error-file)
       (with-current-buffer buffer
         (goto-line (projmake-error-info-line line-error))
 
