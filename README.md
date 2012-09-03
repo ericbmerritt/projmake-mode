@@ -72,7 +72,9 @@ automatically by adding
 to you .emacs configuration and then doing:
 
     (defun my-mode-hook ()
-        (projmake-mode))
+        (projmake-mode)
+        (projmake-search-for-dominating))
+
     (add-hook '<mode>-mode-hook 'my-mode-hook)
 
 
@@ -84,11 +86,23 @@ Using the Mode
 --------------
 
 Typically projects are built (or compiled) using a tool like make, but
-the details vary. The projmake mode needs a project configuration file
-to know how to build your project. A project configuration file
-basically contains an Emacs Lisp expression calling a function named
-projmake that returns a project object. A simple example of a project
-configuration file would be the (Build.bgb) file used with smlbot:
+the details vary. Projmake natively supports make and rebar based
+build systems. You can trivially add addition build systems by
+modifying the 'projmake-project-descs' customization. To automatically
+search for and load a project do the following in to load on your
+major mode load hooks.
+
+    (projmake-search-for-dominating)
+
+
+### Manually describing a project
+
+For those projects that are not automatically discoverable you can add
+a manual mode. The projmake mode will need a project configuration file to
+know how to build your project. A project configuration file basically
+contains an Emacs Lisp expression calling a function named projmake
+that returns a project object. A simple example of a project
+configuration file would be the (projmake) file used with smlbot:
 
     (projmake
      :name  "SML-Bot"
@@ -105,12 +119,6 @@ shell
 : specifies a shell command to execute. This can be any expression
   that evaluates to a string, a list of strings, or to a nullary
   function returning a list of strings.
-
-build?
-: specifies a predicate to determine whether the project should be
-  built after some files have been modified. The predicate is given a
-  list of file names and should return a non-nil value when the project
-  should be built and nil otherwise.
 
 All of the keyword arguments, except :shell, are optional and can be
 left out.
@@ -130,20 +138,8 @@ mode.
 ### Automatically Adding the projmake file
 
 Its also possible to load the mode automatically. By calling
-projmake-find-add-project. This searches the current file system
-hierarchy starting at the directory containing the file backing the
-current buffer. It then searches up through the parent directories
-looking for `projmake`. You may call this interactively or add it as
-a hook for the mode you are interested in.
-
-
-    (require 'projmake-mode)
-
-    (defunct my-mode-hook ()
-      (projmake-mode)
-      (projmake-find-add-project)))
-
-    (add-hook 'special-mode-hook 'my-mode-hook)
+projmake-add-project. This will load up the project manually into the
+system.
 
 After the project file has been loaded and projmake mode activated,
 each time you save a file in Emacs, the projmake mode tries to build

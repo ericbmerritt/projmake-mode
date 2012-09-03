@@ -21,6 +21,7 @@
 (require 'projmake-project)
 (require 'projmake-error-parsing)
 (require 'projmake-markup)
+(require 'projmake-extras)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
@@ -60,6 +61,15 @@ of each project"
   :group 'projmake
   :type 'integer)
 
+(defcustom projmake-project-descs '(("Make" "Makefile" "nice -n5 make")
+                                    ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile"))
+  "These are the default names + dominating files + commands needed to
+automatically search for the project root and build system style"
+  :group 'projmake
+  :type '(alist :value-type (string string string)))
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
 
@@ -89,6 +99,7 @@ of each project"
   "Turn projmake building on for a buffer"
   (interactive)
   (setq projmake-toggled t)
+  (projmake-buildable-event)
   (add-hook 'after-save-hook 'projmake-buildable-event
             t 'local)) ;Only in the current buffer
 
@@ -140,33 +151,6 @@ projmake-find-project-by-file to find the related project."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Active Projects
-
-(defun projmake-find-add-project ()
-  "Searches the directory tree from the current active buffer up
-through the filesystem root looking for the project file
-specified by projmake-project-file-name, usually 'projmake'. When
-it finds that file it loades it using projmake-add-project"
-  (interactive)
-  (let* ((dirname (file-name-directory (buffer-file-name)))
-         (project-dir (locate-dominating-file dirname projmake-project-file-name)))
-    (if project-dir
-        (projmake-add-project (concat project-dir projmake-project-file-name))
-      nil)))
-
-(defun projmake-eval-project-file (file)
-  "Load the user supplied project and eval it as a way to create
-the project struct. This gives the project definer a lot of
-freedom in defining a project though there is some danger
-involved."
-  (with-temp-buffer
-    (buffer-disable-undo)
-    (insert-file-contents file)
-    (goto-char (point-min))
-    (eval `(labels
-               ((projmake
-                 (&rest args)
-                 (apply (function projmake-prj) ,file args)))
-             ,(read (current-buffer))))))
 
 (defun projmake-add-project (&optional file)
   "Adds a project file to bg-build minor mode.  This basically
