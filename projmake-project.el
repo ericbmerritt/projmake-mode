@@ -32,26 +32,27 @@
   (is-building? nil)
   (build-again? nil))
 
-(defun* projmake-prj (file &key name build? shell)
+(defun* projmake-prj (file &key name shell)
   "Creates a project object for projmake-prj."
-  (make-projmake-project
-   :file  file
-   :dir (file-name-directory file)
-   :name (cond ((eq nil name)
-                (file-name-nondirectory file))
-               ((stringp name)
-                name)
-               (t
-                (error "Invalid project name provided")))
-   :shell (cond ((consp shell)
-                 shell)
-                ((stringp shell)
-                 (split-string shell "[ \n\t]+"))
-                (t
-                 (error "Shell command required!")))
+  (let ((dir (file-name-directory file)))
+    (make-projmake-project
+     :file  file
+     :dir dir
+     :name (cond ((eq nil name)
+                  (file-name-nondirectory (directory-file-name dir)))
+                 ((stringp name)
+                  name)
+                 (t
+                  (error "Invalid project name provided")))
+     :shell (cond ((consp shell)
+                   shell)
+                  ((stringp shell)
+                   (split-string shell "[ \n\t]+"))
+                  (t
+                   (error "Shell command required!")))
 
-   :build? t
-   :is-building? nil
-   :build-again? nil))
+     :build? t
+     :is-building? nil
+     :build-again? nil)))
 
 (provide 'projmake-project)
