@@ -13,6 +13,7 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+(require 'projmake-util)
 
 (defun projmake-search-load-project ()
   (interactive)
@@ -30,27 +31,30 @@
 (defun projmake-find-dominating-top (dirname filename)
   "Look for the topmost dominating file with the specified file name"
   (let* ((project-dir (locate-dominating-file dirname filename)))
-        (if project-dir
-            (let* ((parent-dir (file-name-directory (directory-file-name project-dir)))
-                   (top-project-dir (if (and parent-dir (not (string= parent-dir "/")))
-                                        (projmake-find-dominating-top parent-dir filename)
-                                      nil)))
-              (if top-project-dir
-                  top-project-dir
-                project-dir))
-          project-dir)))
+    (if project-dir
+        (let* ((parent-dir (file-name-directory (directory-file-name project-dir)))
+               (top-project-dir (if (and parent-dir (not (string= parent-dir "/")))
+                                    (projmake-find-dominating-top parent-dir filename)
+                                  nil))
+               (return-dir
+                (if top-project-dir
+                    top-project-dir
+                  project-dir)))
+          (projmake-log PROJMAKE-DEBUG "found project dir %s at " return-dir)
+          return-dir)
+      project-dir)))
 
-(require 'projmake-util)
 (defun projmake-make-generic-prj (project-type project-dir dominating-name cmd)
   "Make a project out of the project dir and the dominating
 name. Build the project with the provided command"
-  (projmake-log PROJMAKE-DEBUG "X----->bxb%s" project-dir)
-  (let* ((filename (expand-file-name (concat (file-name-as-directory project-dir) dominating-name)))
+  (projmake-log PROJMAKE-DEBUG "Creating project at %s for a %s project to be built with command '%s'"
+                project-dir project-type cmd)
+  (let* ((filename (expand-file-name
+                    (concat (file-name-as-directory project-dir) dominating-name)))
          (shell cmd)
          (prj (projmake-prj filename :shell shell)))
     (projmake-add-to-projects prj)
     prj))
-
 
 (defun projmake-find-dominating-file-make-project (project-type dominating-name cmd)
   (interactive)
@@ -65,6 +69,8 @@ name. Build the project with the provided command"
 through the filesystem root looking for the project file
 specified by projmake-project-file-name, usually 'projmake'. When
 it finds that file it loades it using projmake-add-project"
+  (projmake-log PROJMAKE-DEBUG "Searching for generic %s project to add"
+                projmake-project-file-name)
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
          (project-dir (locate-dominating-file dirname projmake-project-file-name)))
