@@ -40,7 +40,11 @@
               (projmake-parse-err-lines
                (projmake-project-error-info project)
                (list output-residual)))
-      (setf (projmake-project-residual project) nil))))
+      (setf (projmake-project-residual project) nil))
+    (setf (projmake-project-warning-count project)
+          (projmake-get-err-count project "w"))
+    (setf (projmake-project-error-count project)
+          (projmake-get-err-count project "e"))))
 
 (defun projmake-parse-output-and-residual (project output)
   "Split OUTPUT into lines, merge in residual if necessary."

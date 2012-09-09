@@ -23,6 +23,9 @@
   dir
   name
   shell
+  warning-count
+  error-count
+  last-build-buff
   (build-counter 0)
   ;; mutable build oriented bits
   residual
@@ -50,9 +53,19 @@
                    (split-string shell "[ \n\t]+"))
                   (t
                    (error "Shell command required!")))
-
      :build? t
      :is-building? nil
      :build-again? nil)))
+
+(defun projmake-project-has-warnings? (project)
+  (> (projmake-project-warning-count project) 0))
+
+(defun projmake-project-has-errors? (project)
+  (> (projmake-project-error-count project) 0))
+
+(defun projmake-project-has-errors-or-warnings? (project)
+  (or (projmake-project-has-warnings? project)
+      (projmake-project-has-errors? project)))
+
 
 (provide 'projmake-project)

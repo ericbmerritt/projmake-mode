@@ -68,6 +68,23 @@ automatically search for the project root and build system style"
   :group 'projmake
   :type '(alist :value-type (string string string)))
 
+(defcustom projmake-project-show-failed-process-buffer t
+  "If there is a build process that fails with no warnings or errors
+parsed this variable dictates if that buffer should be shown to the
+user. If true the current buffer will automatically be switched to the
+build process buffer after a failed build (with no warnings or errors
+parsed) completes. The user is then responsable for killing that
+buffer. If false the buffer will be killed normally in the same way as
+the build buffers that produce warnings"
+  :group 'projmake
+  :type 'boolean)
+
+(defcustom projmake-kill-last-build-buffer t
+  "If the last build buffer is visible when the next build completes
+this indicates whether or not it should be killed. If `t it will be
+killed if nil it will not be"
+  :group 'projmake
+  :type 'boolean)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -112,6 +129,7 @@ automatically search for the project root and build system style"
   (remove-hook 'after-save-hook 'projmake-buildable-event
                'local)) ;Only in the current buffer
 
+(add-hook 'projmake-mode-hook 'projmake-buildable-event)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Project Management
@@ -263,7 +281,22 @@ It's flymake process filter."
     (projmake-log PROJMAKE-DEBUG "received %d byte(s) of output from process %d"
                   (length output) (process-id process))
     (when (buffer-live-p source-buffer)
-      (projmake-parse-output-and-residual project output))))
+      (projmake-parse-output-and-residual project output))
+    (projmake-populate-process-buffer process output)))
+
+(defun projmake-populate-process-buffer (proc string)
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((moving (= (point) (process-mark proc))))
+        (save-excursion
+          (setf buffer-read-only nil)
+          ;; Insert the text, advancing the process marker.
+          (goto-char (process-mark proc))
+          (insert string)
+          (set-marker (process-mark proc) (point))
+          (setf buffer-read-only t))
+        (when moving
+          (goto-char (process-mark proc)))))))
 
 (defun projmake-process-sentinel (project process event)
   "Sentinel for syntax check buffers."
@@ -290,19 +323,41 @@ It's flymake process filter."
          (let ((err-str (format "Error in process sentinel for buffer %s: %s"
                                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-      (kill-buffer source-buffer)
+      (projmake-dispose-of-sentinal-buffer (process-exit-status process)
+                                           source-buffer project)
       (projmake-cleanup-project project)
       (when (projmake-project-build-again? project)
         (setf (projmake-project-build-again? project) nil)
         (projmake-build-when project)))))
 
+(defun projmake-dispose-of-sentinal-buffer (exitcode source-buffer project)
+  "If we didnt get any errors then the build failed for someother
+reason. We should switch to the output buffer so the user can see
+that."
+  (if (and projmake-project-show-failed-process-buffer
+           (not (projmake-project-has-errors-or-warnings? project))
+           (not (= 0 exitcode)))
+      (progn
+        (projmake-log PROJMAKE-DEBUG "Switching to the source buffer")
+        (switch-to-buffer source-buffer))
+    (progn
+      (projmake-log PROJMAKE-DEBUG "Successful parse killing process buffer")
+      (kill-buffer source-buffer)))
+
+  (when (and projmake-kill-last-build-buffer
+             (projmake-project-last-build-buff project))
+    (kill-buffer (projmake-project-last-build-buff project)))
+
+  (setf (projmake-project-last-build-buff project) source-buffer))
+
 (defun projmake-post-build (project)
   (projmake-delete-overlays project)
   (projmake-highlight-err-lines project)
-  (projmake-log PROJMAKE-INFO "%s: %d error(s), %d warning(s)"
+  (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
-                (projmake-get-err-count project "e")
-                (projmake-get-err-count project "w")))
+                (projmake-project-error-count project)
+                (projmake-project-warning-count project)))
+
 
 (defun projmake-cleanup-project (project)
   "Clean up the build oriented bits of the project"
