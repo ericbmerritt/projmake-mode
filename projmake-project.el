@@ -26,6 +26,7 @@
   warning-count
   error-count
   last-build-buff
+  inturrupted
   (build-counter 0)
   ;; mutable build oriented bits
   residual

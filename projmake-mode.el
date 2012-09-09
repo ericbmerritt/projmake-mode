@@ -211,6 +211,7 @@ process itself.")
 one. If it does not exist then simple start a new one."
   (when (and process
              (eql 'run (process-status process)))
+    (setf (projmake-project-inturrupted project) t)
     (interrupt-process process))
   (projmake-start-build-process project))
 
@@ -336,7 +337,8 @@ reason. We should switch to the output buffer so the user can see
 that."
   (if (and projmake-project-show-failed-process-buffer
            (not (projmake-project-has-errors-or-warnings? project))
-           (not (= 0 exitcode)))
+           (not (= 0 exitcode))
+           (not (projmake-project-inturrupted project)))
       (progn
         (projmake-log PROJMAKE-DEBUG "Switching to the source buffer")
         (switch-to-buffer source-buffer))
@@ -361,6 +363,7 @@ that."
 
 (defun projmake-cleanup-project (project)
   "Clean up the build oriented bits of the project"
+  (setf (projmake-project-inturrupted project) nil)
   (setf (projmake-project-residual project) nil)
   (setf (projmake-project-error-info project) nil)
   (setf (projmake-project-is-building? project) nil))
