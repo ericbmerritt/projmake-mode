@@ -350,6 +350,10 @@ that."
              (projmake-project-last-build-buff project))
     (kill-buffer (projmake-project-last-build-buff project)))
 
+  (if (= 0 exitcode)
+      (projmake-notify project "successful build")
+    (projmake-notify project "build failed!"))
+
   (setf (projmake-project-last-build-buff project) source-buffer))
 
 (defun projmake-post-build (project)

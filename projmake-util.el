@@ -42,5 +42,26 @@ are the string substitutions (see `format')."
         (when result
           (throw 'break result))))))
 
+(defun projmake-dbus-notify (project message)
+  (if (fboundp 'dbus-call-method)
+      (let ((title (projmake-make-process-name project)))
+        (require 'notifications)
+        (notify-notifications :title  title
+                              :body message
+                              :urgency 'low)
+        t)
+    nil))
+
+(defun projmake-growl-notify (project message)
+  (let* ((title (projmake-make-process-name project))
+         (cmd (concat "-a Emacs -m \"" message "\" -t \"" title "\" ")))
+    (= 0 (call-process "growlnotify" nil nil nil cmd))))
+
+(defun projmake-notify (project message)
+  (cond
+   ((projmake-dbus-notify project message) t)
+   ((projmake-growl-notify project message) t)
+   (t nil)))
+
 
 (provide 'projmake-util)
