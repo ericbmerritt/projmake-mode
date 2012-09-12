@@ -351,8 +351,8 @@ that."
     (kill-buffer (projmake-project-last-build-buff project)))
 
   (if (= 0 exitcode)
-      (projmake-notify project "successful build")
-    (projmake-notify project "build failed!"))
+      (projmake-notify project "successful build" t)
+    (projmake-notify project "build failed!" nil))
 
   (setf (projmake-project-last-build-buff project) source-buffer))
 

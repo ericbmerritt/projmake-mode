@@ -42,21 +42,32 @@ are the string substitutions (see `format')."
         (when result
           (throw 'break result))))))
 
-(defun projmake-dbus-notify (project message)
+(defvar projmake-dir
+  (file-name-directory load-file-name))
+
+
+(defun projmake-dbus-notify (project message good)
   (condition-case nil
       (progn
         (require 'notifications)
         (if (fboundp 'dbus-call-method)
             (let ((title (projmake-make-process-name project)))
-              (notifications-notify :title  title
-                                    :body message
-                                    :urgency 'low)
+              (if good
+                  (notifications-notify :title  title
+                                        :body message
+                                        :image-path (concat "file://" projmake-dir "good-build.png")
+                                        :urgency 'low)
+
+                (notifications-notify :title  title
+                                      :body message
+                                      :image-path (concat "file://" projmake-dir "bad-build.png")
+                                      :urgency 'low))
               t)
           nil))
     (error
      nil)))
 
-(defun projmake-growl-notify (project message)
+(defun projmake-growl-notify (project message good)
   (let* ((title (projmake-make-process-name project))
          (cmd (concat "-a Emacs -m \"" message "\" -t \"" title "\" ")))
     (condition-case nil
@@ -64,10 +75,10 @@ are the string substitutions (see `format')."
       (error
        nil))))
 
-(defun projmake-notify (project message)
+(defun projmake-notify (project message good)
   (cond
-   ((projmake-dbus-notify project message) t)
-   ((projmake-growl-notify project message) t)
+   ((projmake-dbus-notify project message good) t)
+   ((projmake-growl-notify project message good) t)
    (t nil)))
 
 
