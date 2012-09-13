@@ -46,6 +46,14 @@
     (setf (projmake-project-error-count project)
           (projmake-get-err-count project "e"))))
 
+(defun projmake-buffer-has-error (project buffer)
+  (let* ((error-infos (projmake-project-error-info project))
+         (buffer-file (buffer-file-name buffer)))
+    (projmake-find-first #'(lambda (error-info)
+                             (when (string-equal (projmake-error-info-file error-info)
+                                                 buffer-file)
+                               error-info)) error-infos)))
+
 (defun projmake-parse-output-and-residual (project output)
   "Split OUTPUT into lines, merge in residual if necessary."
   (let* ((buffer-residual (projmake-project-residual project))
@@ -182,7 +190,7 @@ error-info struct if successful and nil if not"
   "Parse LINE to see if it is an error or warning.
 Return its components if so, nil otherwise."
   (projmake-find-first #'(lambda (pattern-list)
-                          (projmake-apply-pattern pattern-list line))
+                           (projmake-apply-pattern pattern-list line))
                        projmake-err-line-patterns))
 
 (defun projmake-patch-err-text (string)

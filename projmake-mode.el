@@ -86,6 +86,16 @@ killed if nil it will not be"
   :group 'projmake
   :type 'boolean)
 
+(defcustom projmake-switch-to-buffer-with-error t
+  "Some build systems stop building at the first file that errors. So
+it could be that even if there are errors in the project the user
+doesn't know it because the buffer that is active has no errors. If
+`projmake-switch-to-buffer-with-error' is t then the system checks to
+see if there are errors in the current buffer, if so nothing happens,
+but if there are no errors then the first buffer with errors is made
+active."
+  :group 'projmake
+  :type 'boolean)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
@@ -252,6 +262,8 @@ build."
                               (projmake-process-sentinel project proc event))))
     (condition-case err
         (progn
+          ;; Clean up the project markup up since we are building again
+          (projmake-delete-overlays project)
           (projmake-log PROJMAKE-DEBUG "starting projmake process (%s) on dir %s"
                         shell-cmd default-directory)
           (setq process (apply 'start-process-shell-command
@@ -359,11 +371,34 @@ that."
 (defun projmake-post-build (project)
   (projmake-delete-overlays project)
   (projmake-highlight-err-lines project)
+  (projmake-activate-error-buffer project)
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)
                 (projmake-project-warning-count project)))
 
+(defun projmake-activate-error-buffer (project)
+  " When a projmake build completes it could be that there are no
+errors in the current buffer. When that happens it can look like the
+build finished with no failure. Here if the var
+`projmake-switch-to-buffer-with-error` is set we switch to the first
+buffer we find that has an error"
+  (when projmake-switch-to-buffer-with-error
+    (projmake-log PROJMAKE-DEBUG "checking to see if we need to switch buffers")
+    (let* ((error-infos (projmake-project-error-info project))
+           (buffer-file (buffer-file-name (current-buffer))))
+      (unless (projmake-buffer-has-error project (current-buffer))
+        (projmake-log PROJMAKE-DEBUG "Switching to the first error buffer")
+        (let ((non-buffer-info (projmake-find-first
+                                #'(lambda (error-info)
+                                    (let ((error-file (projmake-error-info-file error-info)))
+                                      (when (not (string-equal error-file
+                                                                    buffer-file))
+                                        (find-file-noselect error-file))))  error-infos)))
+
+          (when non-buffer-info
+            (switch-to-buffer non-buffer-info)
+            (projmake-log PROJMAKE-DEBUG "Switched to error buffer %s" buffer-file)))))))
 
 (defun projmake-cleanup-project (project)
   "Clean up the build oriented bits of the project"
