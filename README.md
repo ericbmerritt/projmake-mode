@@ -73,7 +73,7 @@ to you .emacs configuration and then doing:
 
     (defun my-mode-hook ()
         (projmake-mode)
-        (projmake-search-for-dominating))
+        (projmake-search-load-project))
 
     (add-hook '<mode>-mode-hook 'my-mode-hook)
 
