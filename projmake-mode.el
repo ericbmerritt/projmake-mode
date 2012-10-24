@@ -68,18 +68,8 @@ automatically search for the project root and build system style"
   :group 'projmake
   :type '(alist :value-type (string string string)))
 
-(defcustom projmake-project-show-failed-process-buffer t
-  "If there is a build process that fails with no warnings or errors
-parsed this variable dictates if that buffer should be shown to the
-user. If true the current buffer will automatically be switched to the
-build process buffer after a failed build (with no warnings or errors
-parsed) completes. The user is then responsable for killing that
-buffer. If false the buffer will be killed normally in the same way as
-the build buffers that produce warnings"
-  :group 'projmake
-  :type 'boolean)
 
-(defcustom projmake-kill-last-build-buffer t
+(defcustom projmake-kill-build-buffer t
   "If the last build buffer is visible when the next build completes
 this indicates whether or not it should be killed. If `t it will be
 killed if nil it will not be"
@@ -165,11 +155,8 @@ as anything under the directory where the project configuration
 file exists."
   (projmake-log PROJMAKE-DEBUG "Looking for project for file: %s" file)
   (cdr (find-if (lambda (prj-kv)
-                  (let* ((prj (cdr prj-kv))
-                        (projmake-dir (projmake-project-dir prj)))
-                    (eql t (compare-strings projmake-dir
-                                            0 nil
-                                            file 0 (length projmake-dir)))))
+                  (let* ((prj (cdr prj-kv)))
+                    (projmake-is-file-part-of-project prj file)))
                 projmake-projects)))
 
 (defun projmake-find-project-by-buffer (buffer)
@@ -177,6 +164,18 @@ file exists."
 projmake-find-project-by-file to find the related project."
   (projmake-find-project-by-file (buffer-file-name buffer)))
 
+(defun projmake-is-file-part-of-project (prj file)
+  "Given a project and a file tests to see if the file belongs to the project"
+  (let ((projmake-dir (projmake-project-dir prj)))
+    (eql t (compare-strings projmake-dir
+                            0 nil
+                            file 0 (length projmake-dir)))))
+
+(defun projmake-is-buffer-part-of-project (prj buffer)
+  "Given a project and a buffer tests to see if the file belongs to the project"
+  (if (buffer-file-name buffer)
+      (projmake-is-file-part-of-project prj (buffer-file-name buffer))
+    nil))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Active Projects
 
@@ -330,78 +329,53 @@ It's flymake process filter."
             (when (buffer-live-p source-buffer)
               (with-current-buffer source-buffer
                 (projmake-parse-residual project)
-                (projmake-post-build project)
+                (projmake-post-build (process-exit-status process)
+                                     project)
                 (setf (projmake-project-is-building? project) nil))))
         (error
          (let ((err-str (format "Error in process sentinel for buffer %s: %s"
                                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-      (projmake-dispose-of-sentinal-buffer (process-exit-status process)
-                                           source-buffer project)
-      (projmake-cleanup-project project)
+      (projmake-cleanup-project project source-buffer)
       (when (projmake-project-build-again? project)
         (setf (projmake-project-build-again? project) nil)
         (projmake-build-when project)))))
 
-(defun projmake-dispose-of-sentinal-buffer (exitcode source-buffer project)
+(defun projmake-check-error-output (exitcode project)
   "If we didnt get any errors then the build failed for someother
 reason. We should switch to the output buffer so the user can see
 that."
-  (if (and projmake-project-show-failed-process-buffer
-           (not (projmake-project-has-errors-or-warnings? project))
-           (not (= 0 exitcode))
-           (not (projmake-project-inturrupted project)))
-      (progn
-        (projmake-log PROJMAKE-DEBUG "Switching to the source buffer")
-        (switch-to-buffer source-buffer))
-    (progn
-      (projmake-log PROJMAKE-DEBUG "Successful parse killing process buffer")
-      (kill-buffer source-buffer)))
+  ;; Add warning to the top of the file
+  (dolist (buffer (buffer-list))
+    (when (projmake-is-buffer-part-of-project project buffer)
+      (push (make-projmake-error-info :file (buffer-file-name buffer)
+                                      :line 1
+                                      :type "e"
+                                      :text "BUILD FAILED IN THIS PROJECT")
+            (projmake-project-error-info project)))))
 
-  (when (and projmake-kill-last-build-buffer
-             (projmake-project-last-build-buff project))
-    (kill-buffer (projmake-project-last-build-buff project)))
-
-  (if (= 0 exitcode)
-      (projmake-notify project "successful build" t)
-    (projmake-notify project "build failed!" nil))
-
-  (setf (projmake-project-last-build-buff project) source-buffer))
-
-(defun projmake-post-build (project)
+(defun projmake-post-build (exitcode project)
   (projmake-delete-overlays project)
-  (projmake-highlight-err-lines project)
-  (projmake-activate-error-buffer project)
+  (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
+  (when (and (not (= 0 exitcode))
+             (not (projmake-project-inturrupted project)))
+    (projmake-check-error-output exitcode project)
+    (projmake-highlight-err-lines project))
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)
                 (projmake-project-warning-count project)))
 
-(defun projmake-activate-error-buffer (project)
-  " When a projmake build completes it could be that there are no
-errors in the current buffer. When that happens it can look like the
-build finished with no failure. Here if the var
-`projmake-switch-to-buffer-with-error` is set we switch to the first
-buffer we find that has an error"
-  (when projmake-switch-to-buffer-with-error
-    (projmake-log PROJMAKE-DEBUG "checking to see if we need to switch buffers")
-    (let* ((error-infos (projmake-project-error-info project))
-           (buffer-file (buffer-file-name (current-buffer))))
-      (unless (projmake-buffer-has-error project (current-buffer))
-        (projmake-log PROJMAKE-DEBUG "Switching to the first error buffer")
-        (let ((non-buffer-info (projmake-find-first
-                                #'(lambda (error-info)
-                                    (let ((error-file (projmake-error-info-file error-info)))
-                                      (when (not (string-equal error-file
-                                                                    buffer-file))
-                                        (find-file-noselect error-file))))  error-infos)))
-
-          (when non-buffer-info
-            (switch-to-buffer non-buffer-info)
-            (projmake-log PROJMAKE-DEBUG "Switched to error buffer %s" buffer-file)))))))
-
-(defun projmake-cleanup-project (project)
+(defun projmake-cleanup-project (project source-buffer)
   "Clean up the build oriented bits of the project"
+  (when (buffer-live-p (projmake-project-last-build-buffer project))
+    (kill-buffer (projmake-project-last-build-buffer project)))
+
+  (when projmake-kill-build-buffer
+    (kill-buffer source-buffer))
+
+  (setf (projmake-project-last-build-buffer project) source-buffer)
+
   (setf (projmake-project-inturrupted project) nil)
   (setf (projmake-project-residual project) nil)
   (setf (projmake-project-error-info project) nil)

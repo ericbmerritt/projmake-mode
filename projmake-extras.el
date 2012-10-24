@@ -41,6 +41,7 @@
                     top-project-dir
                   project-dir)))
           (projmake-log PROJMAKE-DEBUG "found project dir %s at " return-dir)
+
           return-dir)
       project-dir)))
 
@@ -92,5 +93,11 @@ involved."
                  (&rest args)
                  (apply (function projmake-prj) ,file args)))
              ,(read (current-buffer))))))
+
+(defun projmake-toggle-kill-build-buffer ()
+  "Toggle killing of the build buffer after a build"
+  (interactive)
+  (setf projmake-kill-build-buffer (not projmake-kill-build-buffer))
+  (projmake-buildable-event))
 
 (provide 'projmake-extras)

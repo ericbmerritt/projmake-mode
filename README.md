@@ -144,3 +144,19 @@ system.
 After the project file has been loaded and projmake mode activated,
 each time you save a file in Emacs, the projmake mode tries to build
 your project.
+
+Seeing The Build Output
+-----------------------
+
+Projmake only puts markers on buffers when build errors
+happen. However, sometimes the build process itself fails, or on
+parsable error information for files in open buffers are
+presented. When this happens you sometimes what to see the build
+output. You can do that by toggling the build output on (there will be
+one buffer per project) with:
+
+    M-x projmake-toggle-kill-build-buffer
+
+This will allow the output from the lastest build to be always
+available in a buffer. However, it does not bring that buffer to the
+front.

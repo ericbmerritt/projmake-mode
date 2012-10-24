@@ -25,13 +25,13 @@
   shell
   warning-count
   error-count
-  last-build-buff
   inturrupted
   (build-counter 0)
   ;; mutable build oriented bits
   residual
   error-info
   overlays
+  last-build-buffer
   (build? t)
   (is-building? nil)
   (build-again? nil))
@@ -67,6 +67,5 @@
 (defun projmake-project-has-errors-or-warnings? (project)
   (or (projmake-project-has-warnings? project)
       (projmake-project-has-errors? project)))
-
 
 (provide 'projmake-project)

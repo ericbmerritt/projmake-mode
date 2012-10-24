@@ -49,12 +49,13 @@
   "Highlight line LINE-NO in current buffer.
 Perhaps use text from line-error to enhance highlighting."
   (let* ((error-file (projmake-error-info-file line-error))
+         (error-text (projmake-error-info-text line-error))
          (buffer (get-file-buffer error-file)))
+    (projmake-log PROJMAKE-DEBUG "Looking for buffer for %s" error-file)
     (when buffer
-      (projmake-log PROJMAKE-DEBUG "Got buffer for error file %s" error-file)
+      (projmake-log PROJMAKE-DEBUG "Got buffer for %s" error-file)
       (with-current-buffer buffer
         (goto-line (projmake-error-info-line line-error))
-
         (let* ((line-beg (projmake-line-beginning-position))
                (line-end (projmake-line-end-position))
                (tooltip-text (projmake-error-info-text line-error))
@@ -70,7 +71,6 @@ Perhaps use text from line-error to enhance highlighting."
 
           (projmake-add-overlay project
                                 line-beg line-end tooltip-text face nil))))))
-
 
 (defun projmake-util-attr (face str)
   "add some properties to a text string and return it"
