@@ -123,8 +123,9 @@ active."
 (defun projmake-off ()
   "Turn projmake off "
   (interactive)
-  (projmake-delete-overlays
-   (projmake-find-project-by-buffer (current-buffer)))
+  (let ((project (projmake-find-project-by-buffer (current-buffer))))
+    (projmake-clean-notifications project))
+
   (setq projmake-toggled nil)
   (remove-hook 'after-save-hook 'projmake-buildable-event
                'local)) ;Only in the current buffer
@@ -262,7 +263,8 @@ build."
     (condition-case err
         (progn
           ;; Clean up the project markup up since we are building again
-          (projmake-delete-overlays project)
+          (projmake-clean-notifications project)
+          (projmake-notify project "BUILDING ....")
           (projmake-log PROJMAKE-DEBUG "starting projmake process (%s) on dir %s"
                         shell-cmd default-directory)
           (setq process (apply 'start-process-shell-command
@@ -341,26 +343,43 @@ It's flymake process filter."
         (setf (projmake-project-build-again? project) nil)
         (projmake-build-when project)))))
 
-(defun projmake-check-error-output (exitcode project)
-  "If we didnt get any errors then the build failed for someother
-reason. We should switch to the output buffer so the user can see
-that."
+(defun projmake-notify-failed (exitcode project)
   ;; Add warning to the top of the file
-  (dolist (buffer (buffer-list))
-    (when (projmake-is-buffer-part-of-project project buffer)
-      (push (make-projmake-error-info :file (buffer-file-name buffer)
-                                      :line 1
-                                      :type "e"
-                                      :text "BUILD FAILED IN THIS PROJECT")
-            (projmake-project-error-info project)))))
+  (projmake-notify project
+                   (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
+                           exitcode
+                           (projmake-project-error-count project)
+                           (projmake-project-warning-count project))
+                   t))
+
+(defun projmake-notify (project detail &optional error)
+  ;; Add warning to the top of the file
+  (projmake-do-for-project-buffers project
+                                   (if error
+                                       (setf header-line-format
+                                             (projmake-with-face
+                                              detail
+                                              :foreground "red"))
+                                     (setf header-line-format detail))))
+
+(defun projmake-unnotify (project)
+  (projmake-do-for-project-buffers project
+                                   (setf header-line-format nil)))
+
+
+(defun projmake-clean-notifications (project)
+  (projmake-unnotify project)
+  (projmake-delete-overlays project))
 
 (defun projmake-post-build (exitcode project)
   (projmake-delete-overlays project)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
-  (when (and (not (= 0 exitcode))
+  (if (and (not (= 0 exitcode))
              (not (projmake-project-inturrupted project)))
-    (projmake-check-error-output exitcode project)
-    (projmake-highlight-err-lines project))
+      (progn
+        (projmake-notify-failed exitcode project)
+        (projmake-highlight-err-lines project))
+    (projmake-notify project nil))
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)

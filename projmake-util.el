@@ -81,5 +81,14 @@ are the string substitutions (see `format')."
    ((projmake-growl-notify project message good) t)
    (t nil)))
 
+(defmacro projmake-with-face (str &rest properties)
+    `(propertize ,str 'face (list ,@properties)))
+
+(defmacro projmake-do-for-project-buffers (project &rest actions)
+  `(dolist (buffer (buffer-list))
+    (when (projmake-is-buffer-part-of-project ,project buffer)
+      (with-current-buffer buffer
+        ,@actions))))
+
 
 (provide 'projmake-util)
