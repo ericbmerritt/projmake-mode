@@ -15,6 +15,7 @@
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 (require 'projmake-util)
 
+;;;###autoload
 (defun projmake-search-load-project ()
   (interactive)
   (when (not (projmake-search-for-dominating))

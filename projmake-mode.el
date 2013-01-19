@@ -25,7 +25,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
-
+;;;###autoload
 (defface projmake-errline
   '((((class color) (background dark)) (:background "Firebrick4" :italic))
     (((class color) (background light)) (:background "LightPink" :italic))
@@ -33,6 +33,7 @@
   "Face used for marking error lines."
   :group 'projmake)
 
+;;;###autoload
 (defface projmake-warnline
   '((((class color) (background dark)) (:background "DarkBlue"))
     (((class color) (background light)) (:background "LightBlue2"))
@@ -40,12 +41,14 @@
   "Face used for marking warning lines."
   :group 'projmake)
 
+;;;###autoload
 (defcustom projmake-project-file-name "projmake"
   "The name of the 'projmake' description file that indicates the root
 of each project"
   :group 'projmake
   :type 'string)
 
+;;;###autoload
 (defcustom projmake-build-now! t
   "Indicates whether the current build (if one exists) is killed and
   restarted when ever a relevant build event occurs. If t the current
@@ -55,12 +58,14 @@ of each project"
   :group 'projmake
   :type 'boolean)
 
+;;;###autoload
 (defcustom projmake-log-level -1
   "Logging level, only messages with level lower or equal will be logged.
 -1 = NONE, 0 = ERROR, 1 = WARNING, 2 = INFO, 3 = DEBUG"
   :group 'projmake
   :type 'integer)
 
+;;;###autoload
 (defcustom projmake-project-descs '(("Make" "Makefile" "nice -n5 make")
                                     ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile"))
   "These are the default names + dominating files + commands needed to
@@ -68,7 +73,7 @@ automatically search for the project root and build system style"
   :group 'projmake
   :type '(alist :value-type (string string string)))
 
-
+;;;###autoload
 (defcustom projmake-kill-build-buffer t
   "If the last build buffer is visible when the next build completes
 this indicates whether or not it should be killed. If `t it will be
@@ -76,6 +81,7 @@ killed if nil it will not be"
   :group 'projmake
   :type 'boolean)
 
+;;;###autoload
 (defcustom projmake-switch-to-buffer-with-error t
   "Some build systems stop building at the first file that errors. So
 it could be that even if there are errors in the project the user
@@ -89,7 +95,7 @@ active."
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
-
+;;;###autoload
 (define-minor-mode projmake-mode
   "Toggle projmake-mode
 
@@ -105,6 +111,7 @@ active."
       (make-local-variable 'projmake-toggled)
       (projmake-on))
 
+;;;###autoload
 (defun projmake-toggle ()
   "Togle projmake on or off depending on what projmake-toggle is set to"
   (interactive)
@@ -112,6 +119,7 @@ active."
       (projmake-off)
     (projmake-on)))
 
+;;;###autoload
 (defun projmake-on ()
   "Turn projmake building on for a buffer"
   (interactive)
@@ -120,6 +128,7 @@ active."
   (add-hook 'after-save-hook 'projmake-buildable-event
             t 'local)) ;Only in the current buffer
 
+;;;###autoload
 (defun projmake-off ()
   "Turn projmake off "
   (interactive)
