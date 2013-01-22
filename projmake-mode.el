@@ -1,4 +1,5 @@
-;; -*- coding: utf-8; lexical-binding: t -*-
+;;; projmake-mode.el --- automatically run the build system for your projects -*- coding: utf-8; lexical-binding: t -*-
+;;
 ;; Copyright (C) 2007-2008 Vesa Karvonen
 ;; Copyright (C) 2012 Eric Merritt
 ;;
