@@ -74,14 +74,6 @@ automatically search for the project root and build system style"
   :type '(alist :value-type (string string string)))
 
 ;;;###autoload
-(defcustom projmake-kill-build-buffer t
-  "If the last build buffer is visible when the next build completes
-this indicates whether or not it should be killed. If `t it will be
-killed if nil it will not be"
-  :group 'projmake
-  :type 'boolean)
-
-;;;###autoload
 (defcustom projmake-switch-to-buffer-with-error t
   "Some build systems stop building at the first file that errors. So
 it could be that even if there are errors in the project the user
@@ -133,7 +125,7 @@ active."
   "Turn projmake off "
   (interactive)
   (let ((project (projmake-find-project-by-buffer (current-buffer))))
-    (projmake-clean-notifications project))
+    (projmake-clear-project-output project))
 
   (setq projmake-toggled nil)
   (remove-hook 'after-save-hook 'projmake-buildable-event
@@ -271,8 +263,8 @@ build."
                               (projmake-process-sentinel project proc event))))
     (condition-case err
         (progn
+          (projmake-clear-project-output project)
           ;; Clean up the project markup up since we are building again
-          (projmake-clean-notifications project)
           (projmake-notify project "BUILDING ....")
           (projmake-log PROJMAKE-DEBUG "starting projmake process (%s) on dir %s"
                         shell-cmd default-directory)
@@ -305,21 +297,17 @@ It's flymake process filter."
                   (length output) (process-id process))
     (when (buffer-live-p source-buffer)
       (projmake-parse-output-and-residual project output))
-    (projmake-populate-process-buffer process output)))
+    (projmake-populate-process-buffer project output)))
 
-(defun projmake-populate-process-buffer (proc string)
-  (when (buffer-live-p (process-buffer proc))
-    (with-current-buffer (process-buffer proc)
-      (let ((moving (= (point) (process-mark proc))))
-        (save-excursion
-          (setf buffer-read-only nil)
-          ;; Insert the text, advancing the process marker.
-          (goto-char (process-mark proc))
-          (insert string)
-          (set-marker (process-mark proc) (point))
-          (setf buffer-read-only t))
-        (when moving
-          (goto-char (process-mark proc)))))))
+(defun projmake-populate-process-buffer (project string)
+  (let ((output-buffer (get-buffer-create (projmake-build-buffer-name project))))
+    (with-current-buffer output-buffer
+      (save-excursion
+        (setf buffer-read-only nil)
+        ;; Insert the text, advancing the process marker.
+        (goto-char (point-max))
+        (insert string)
+        (setf buffer-read-only t)))))
 
 (defun projmake-process-sentinel (project process event)
   "Sentinel for syntax check buffers."
@@ -337,17 +325,13 @@ It's flymake process filter."
             (setf projmake-processes
                   (assq-delete-all (projmake-project-file project)
                                    projmake-processes))
-            (when (buffer-live-p source-buffer)
-              (with-current-buffer source-buffer
-                (projmake-parse-residual project)
-                (projmake-post-build (process-exit-status process)
-                                     project)
-                (setf (projmake-project-is-building? project) nil))))
+            (projmake-parse-residual project))
         (error
          (let ((err-str (format "Error in process sentinel for buffer %s: %s"
                                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-      (projmake-cleanup-project project source-buffer)
+      (projmake-post-build exit-status project)
+      (kill-buffer (process-buffer process))
       (when (projmake-project-build-again? project)
         (setf (projmake-project-build-again? project) nil)
         (projmake-build-when project)))))
@@ -376,37 +360,33 @@ It's flymake process filter."
                                    (setf header-line-format nil)))
 
 
-(defun projmake-clean-notifications (project)
+(defun projmake-clear-project-output (project)
   (projmake-unnotify project)
-  (projmake-delete-overlays project))
+  (projmake-delete-overlays project)
+  (setf (projmake-project-error-info project) nil)
+  (let ((build-buffer (get-buffer (projmake-build-buffer-name project))))
+    (when (buffer-live-p build-buffer)
+      (kill-buffer build-buffer))))
 
 (defun projmake-post-build (exitcode project)
+  (projmake-cleanup-transient-project-data project)
   (projmake-delete-overlays project)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
   (if (and (not (= 0 exitcode))
-             (not (projmake-project-inturrupted project)))
+           (not (projmake-project-inturrupted project)))
       (progn
         (projmake-notify-failed exitcode project)
         (projmake-highlight-err-lines project))
-    (projmake-notify project nil))
+    (progn
+      (projmake-notify project nil)
+      (kill-buffer (get-buffer ( projmake-build-buffer-name project)))))
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)
                 (projmake-project-warning-count project)))
 
-(defun projmake-cleanup-project (project source-buffer)
-  "Clean up the build oriented bits of the project"
-  (when (buffer-live-p (projmake-project-last-build-buffer project))
-    (kill-buffer (projmake-project-last-build-buffer project)))
-
-  (when projmake-kill-build-buffer
-    (kill-buffer source-buffer))
-
-  (setf (projmake-project-last-build-buffer project) source-buffer)
-
-  (setf (projmake-project-inturrupted project) nil)
-  (setf (projmake-project-residual project) nil)
-  (setf (projmake-project-error-info project) nil)
-  (setf (projmake-project-is-building? project) nil))
+(defun projmake-build-buffer-name (project)
+  (let ((project-name (projmake-project-name project)))
+    (concat "Build Output [" project-name "]")))
 
 (provide 'projmake-mode)

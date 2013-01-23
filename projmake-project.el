@@ -31,7 +31,6 @@
   residual
   error-info
   overlays
-  last-build-buffer
   (build? t)
   (is-building? nil)
   (build-again? nil))
@@ -67,5 +66,11 @@
 (defun projmake-project-has-errors-or-warnings? (project)
   (or (projmake-project-has-warnings? project)
       (projmake-project-has-errors? project)))
+
+(defun projmake-cleanup-transient-project-data (project)
+  "Clean up the build oriented bits of the project"
+  (setf (projmake-project-inturrupted project) nil)
+  (setf (projmake-project-residual project) nil)
+  (setf (projmake-project-is-building? project) nil))
 
 (provide 'projmake-project)
