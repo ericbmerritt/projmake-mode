@@ -46,44 +46,6 @@ are the string substitutions (see `format')."
   (file-name-directory load-file-name))
 
 
-(defun projmake-dbus-notify (project message good)
-  (condition-case nil
-      (progn
-        (require 'notifications)
-        (if (fboundp 'dbus-call-method)
-            (let ((title (projmake-make-process-name project)))
-              (if good
-                  (notifications-notify :title  title
-                                        :body message
-                                        :image-path (concat "file://" projmake-dir "good-build.png")
-                                        :urgency 'low)
-
-                (notifications-notify :title  title
-                                      :body message
-                                      :image-path (concat "file://" projmake-dir "bad-build.png")
-                                      :urgency 'low))
-              t)
-          nil))
-    (error
-     nil)))
-
-(defun projmake-growl-notify (project message good)
-  (let* ((title (projmake-make-process-name project))
-         (cmd (concat "-a Emacs -m \"" message "\" -t \"" title "\" ")))
-    (condition-case nil
-        (= 0 (call-process "growlnotify" nil nil nil cmd))
-      (error
-       nil))))
-
-(defun projmake-notify (project message good)
-  (cond
-   ((projmake-dbus-notify project message good) t)
-   ((projmake-growl-notify project message good) t)
-   (t nil)))
-
-(defmacro projmake-with-face (str &rest properties)
-    `(propertize ,str 'face (list ,@properties)))
-
 (defmacro projmake-do-for-project-buffers (project &rest actions)
   `(dolist (buffer (buffer-list))
     (when (projmake-is-buffer-part-of-project ,project buffer)
