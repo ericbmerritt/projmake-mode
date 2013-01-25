@@ -100,8 +100,8 @@ Return t if it has at least one projmake overlay, nil if no overlay."
       (overlay-put ov 'projmake-overlay t)
       (overlay-put ov 'priority 100)
       (overlay-put ov 'evaporate t)
-      (overlay-put ov 'after-string
-                   (projmake-util-attr face (concat " <-- " tooltip-text)))
+      (overlay-put ov 'before-string
+                   (projmake-util-attr face (concat tooltip-text ": \n")))
       (projmake-log PROJMAKE-DEBUG "created an overlay at (%d-%d)" beg end)
 
       (push ov (projmake-project-overlays project)))))
