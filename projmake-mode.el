@@ -42,6 +42,22 @@
   :group 'projmake)
 
 ;;;###autoload
+(defface projmake-notify-err
+  '((t (:foreground "red"
+                    :weight bold
+                    :background "white")))
+  "Face used for the header line notification on error."
+  :group 'projmake)
+
+;;;###autoload
+(defface projmake-notify-normal
+  '((t (:foreground "black"
+                    :weight bold
+                    :background "white")))
+  "Face used for header line notification on normal notifications."
+  :group 'projmake)
+
+;;;###autoload
 (defcustom projmake-project-file-name "projmake"
   "The name of the 'projmake' description file that indicates the root
 of each project"
@@ -349,11 +365,9 @@ It's flymake process filter."
   ;; Add warning to the top of the file
   (projmake-do-for-project-buffers project
                                    (if error
-                                       (setf header-line-format
-                                             (projmake-with-face
-                                              detail
-                                              :foreground "red"))
-                                     (setf header-line-format detail))))
+                                       (projmake-update-header detail t)
+                                     (projmake-update-header detail))))
+
 
 (defun projmake-unnotify (project)
   (projmake-do-for-project-buffers project
