@@ -373,14 +373,11 @@ It's flymake process filter."
   (projmake-do-for-project-buffers project
                                    (setf header-line-format nil)))
 
-
 (defun projmake-clear-project-output (project)
   (projmake-unnotify project)
   (projmake-delete-overlays project)
   (setf (projmake-project-error-info project) nil)
-  (let ((build-buffer (get-buffer (projmake-build-buffer-name project))))
-    (when (buffer-live-p build-buffer)
-      (kill-buffer build-buffer))))
+  (projmake-erase-build-buffer project))
 
 (defun projmake-post-build (exitcode project)
   (projmake-cleanup-transient-project-data project)
@@ -393,7 +390,8 @@ It's flymake process filter."
         (projmake-highlight-err-lines project))
     (progn
       (projmake-notify project nil)
-      (kill-buffer (get-buffer ( projmake-build-buffer-name project)))))
+      (projmake-erase-build-buffer project)))
+
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)
@@ -402,5 +400,15 @@ It's flymake process filter."
 (defun projmake-build-buffer-name (project)
   (let ((project-name (projmake-project-name project)))
     (concat "Build Output [" project-name "]")))
+
+(defun projmake-erase-build-buffer (project)
+  (let ((build-buffer (get-buffer (projmake-build-buffer-name project))))
+    (when (buffer-live-p build-buffer)
+      (with-current-buffer build-buffer
+        (save-excursion
+          (setf buffer-read-only nil)
+          (erase-buffer)
+          (setf buffer-read-only t))))))
+
 
 (provide 'projmake-mode)
