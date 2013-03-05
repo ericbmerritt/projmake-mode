@@ -18,11 +18,12 @@
 ;;;###autoload
 (defun projmake-search-load-project ()
   (interactive)
-  (when (not (projmake-search-for-dominating))
-    (projmake-find-add-manual-project)))
+  (when (not (projmake-find-add-manual-project))
+    (projmake-search-for-dominating)))
 
 (defun projmake-search-for-dominating ()
   "Search for a useful set of dominating files "
+  (projmake-log PROJMAKE-DEBUG "looking for a dominating build file ")
   (catch 'break
     (dolist (proj-desc projmake-project-descs)
       (let ((result (apply 'projmake-find-dominating-file-make-project proj-desc)))
@@ -75,10 +76,16 @@ it finds that file it loades it using projmake-add-project"
                 projmake-project-file-name)
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
-         (project-dir (locate-dominating-file dirname projmake-project-file-name)))
-    (if project-dir
-        (projmake-add-project (concat project-dir projmake-project-file-name))
-      nil)))
+         (project-dir (locate-dominating-file dirname projmake-project-file-name))
+         (project-file (concat project-dir projmake-project-file-name)))
+    (if (file-exists-p project-file)
+        (projmake-add-project project-file)
+      (let* ((dot-file (concat "." projmake-project-file-name))
+             (dot-project-dir (locate-dominating-file dirname dot-file))
+             (dot-project-file (concat dot-project-dir dot-file)))
+        (if (file-exists-p dot-project-file)
+            (projmake-add-project dot-project-file)
+          nil)))))
 
 (defun projmake-eval-project-file (file)
   "Load the user supplied project and eval it as a way to create
