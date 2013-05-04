@@ -346,11 +346,9 @@ It's flymake process filter."
          (let ((err-str (format "Error in process sentinel for buffer %s: %s"
                                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-      (projmake-post-build exit-status project)
+
       (kill-buffer (process-buffer process))
-      (when (projmake-project-build-again? project)
-        (setf (projmake-project-build-again? project) nil)
-        (projmake-build-when project)))))
+      (projmake-post-build exit-status project))))
 
 (defun projmake-notify-failed (exitcode project)
   ;; Add warning to the top of the file
@@ -380,22 +378,31 @@ It's flymake process filter."
   (projmake-erase-build-buffer project))
 
 (defun projmake-post-build (exitcode project)
-  (projmake-cleanup-transient-project-data project)
   (projmake-delete-overlays project)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
-  (if (and (not (= 0 exitcode))
-           (not (projmake-project-inturrupted project)))
-      (progn
-        (projmake-notify-failed exitcode project)
-        (projmake-highlight-err-lines project))
+  (cond
+   ((projmake-project-inturrupted project)
+    (setf (projmake-project-inturrupted project) nil))
+   ((and (not (= 0 exitcode))
+         (not (projmake-project-inturrupted project)))
+    (progn
+      (projmake-notify-failed exitcode project)
+      (projmake-highlight-err-lines project)))
+   (t
     (progn
       (projmake-notify project nil)
-      (projmake-erase-build-buffer project)))
+      (projmake-erase-build-buffer project))))
+
+  (projmake-cleanup-transient-project-data project)
 
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
                 (projmake-project-error-count project)
-                (projmake-project-warning-count project)))
+                (projmake-project-warning-count project))
+
+  (when (projmake-project-build-again? project)
+    (setf (projmake-project-build-again? project) nil)
+    (projmake-build-when project)))
 
 (defun projmake-build-buffer-name (project)
   (let ((project-name (projmake-project-name project)))
