@@ -155,6 +155,14 @@ active."
   "This is where all the active projects currently loaded are
 stored")
 
+(defun projmake-clear-projects ()
+"Clears projects out of the projects variable. This is useful when you
+want to reload a project. After this you need to rerun the projmake
+setup for your file. Either restart the mode or open a file of that
+mode"
+(interactive)
+(setf projmake-projects nil))
+
 (defun projmake-add-to-projects (prj)
    "Adds a project to the project list only if that project does not
 already exist. Where existance is indicated by the full path of the
