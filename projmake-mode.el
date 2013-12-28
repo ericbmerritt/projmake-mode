@@ -83,7 +83,8 @@ of each project"
 
 ;;;###autoload
 (defcustom projmake-project-descs '(("Make" "Makefile" "nice -n5 make")
-                                    ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile"))
+                                    ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile")
+                                    ("Cabal" "Setup.hs" "nice -n5 cabal build"))
   "These are the default names + dominating files + commands needed to
 automatically search for the project root and build system style"
   :group 'projmake
