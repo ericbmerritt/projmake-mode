@@ -23,6 +23,7 @@
   dir
   name
   shell
+  last-exitcode
   warning-count
   error-count
   inturrupted

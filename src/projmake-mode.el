@@ -24,6 +24,7 @@
 (require 'projmake-error-parsing)
 (require 'projmake-markup)
 (require 'projmake-extras)
+(require 'projmake-banner)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
@@ -308,7 +309,7 @@ build."
           (projmake-clear-project-output project)
           ;; Clean up the project markup up since we are building
           ;; again
-          (projmake-notify project "BUILDING ....")
+          (projmake-banner-building)
           (projmake-log PROJMAKE-DEBUG
                         "starting projmake process (%s) on dir %s"
                         shell-cmd default-directory)
@@ -385,49 +386,27 @@ It's flymake process filter."
       (kill-buffer (process-buffer process))
       (projmake-post-build exit-status project))))
 
-(defun projmake-notify-failed (exitcode project)
-  ;; Add warning to the top of the file
-  (projmake-notify project
-                   (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
-                           exitcode
-                           (projmake-project-error-count project)
-                           (projmake-project-warning-count project))
-                   t))
-
-(defun projmake-notify (project detail &optional error)
-  ;; Add warning to the top of the file
-  (projmake-do-for-project-buffers project
-                                   (if error
-                                       (projmake-update-header detail t)
-                                     (projmake-update-header detail))))
-
-
-(defun projmake-unnotify (project)
-  (projmake-do-for-project-buffers project
-                                   (setf header-line-format nil)))
 
 (defun projmake-clear-project-output (project)
-  (projmake-unnotify project)
+  (projmake-banner-clear project)
   (projmake-delete-overlays project)
   (setf (projmake-project-error-info project) nil)
   (projmake-erase-build-buffer project))
 
 (defun projmake-post-build (exitcode project)
+  (setf (projmake-project-last-exitcode project) exitcode)
   (projmake-delete-overlays project)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
+  (projmake-banner-show project)
   (cond
    ((projmake-project-inturrupted project)
     (setf (projmake-project-inturrupted project) nil))
-   ((and (not (= 0 exitcode))
-         (not (projmake-project-inturrupted project)))
-    (progn
-      (projmake-notify-failed exitcode project)
-      (projmake-highlight-err-lines project)))
-   (t
-    (progn
-      (projmake-notify project nil)
-      (projmake-erase-build-buffer project))))
+   ((not (= 0 exitcode))
+    (projmake-highlight-err-lines project))
+   (t (projmake-erase-build-buffer project)))
 
+
+(projmake-notify-failed exitcode project)
   (projmake-cleanup-transient-project-data project)
 
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"

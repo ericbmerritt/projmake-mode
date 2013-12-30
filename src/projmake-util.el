@@ -48,24 +48,6 @@ are the string substitutions (see `format')."
 (defvar projmake-dir
   (file-name-directory load-file-name))
 
-(defun projmake-pad-header-line (string)
-  (let* ((size (window-total-width))
-         (padding (- size (length string)))
-         (pad (+ (length string) padding))
-         (line-format (format "%%%ds" (- pad))))
-    (format line-format string)))
-
-(defun projmake-update-header (str &rest error)
-  (if (not str)
-      (setq header-line-format nil)
-    (let ((header-line-string (projmake-pad-header-line str))
-          (hface (if error
-                     'projmake-notify-err
-                   'projmake-notify-normal)))
-      (setq header-line-format
-            (list :propertize header-line-string
-                  'face hface)))))
-
 (defmacro projmake-do-for-project-buffers (project &rest actions)
   `(dolist (buffer (buffer-list))
      (when (projmake-is-buffer-part-of-project ,project buffer)
