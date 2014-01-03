@@ -16,6 +16,7 @@
 (require 'projmake-util)
 (require 'projmake-project)
 (require 'projmake-default-parse-engine)
+(require 'projmake-ocaml-parse-engine)
 
 (defvar projmake-project-descs)
 (defvar projmake-project-file-name)

@@ -22,7 +22,7 @@
 (require 'projmake-extras)
 (require 'projmake-banner)
 (require 'projmake-parse-engine)
-
+(require 'projmake-ocaml-parse-engine)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
@@ -87,6 +87,8 @@ logged. -1 = NONE, 0 = ERROR, 1 = WARNING, 2 = INFO, 3 = DEBUG"
 ;;;###autoload
 (defcustom projmake-project-descs
   '(("Make" "Makefile" "nice -n5 make")
+    ("Ocaml" "myocamlbuild.ml" "nice -n5 ocaml setup.ml -build"
+     (projmake-ocaml-parse-engine-make))
     ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile"))
   "These are the default names + dominating files + commands needed to
 automatically search for the project root and build system style"
@@ -314,9 +316,13 @@ It's flymake process filter."
                   (process-id process))
     (when (buffer-live-p source-buffer)
       (let ((error-infos
-             (call-projmake-parse-engine-parse-output project output)))
-        (projmake-highlight-err-lines project error-infos)))
-    (projmake-populate-process-buffer project output)))
+             (call-projmake-parse-engine-parse-output project output))
+            (project-errors (projmake-project-error-info project)))
+        (when error-infos
+          (setf (projmake-project-error-info project)
+                (append project-errors error-infos))
+          (projmake-highlight-err-lines project error-infos)))
+      (projmake-populate-process-buffer project output))))
 
 (defun projmake-populate-process-buffer (project string)
   (let ((output-buffer (get-buffer-create
