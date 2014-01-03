@@ -1,4 +1,4 @@
-;; -*- coding: utf-8; lexical-binding: t -*-
+;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2012 Eric Merritt
 ;;
 ;; GNU Emacs is free software: you can redistribute it and/or modify
@@ -14,6 +14,16 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 (require 'projmake-util)
+(require 'projmake-project)
+
+(defvar projmake-project-descs)
+(defvar projmake-project-file-name)
+(defvar projmake-kill-build-buffer)
+
+(declare-function projmake-add-to-projects "projmake-mode.el" (prj))
+(declare-function projmake-add-project "projmake-mode.el"
+                  (&optional file))
+(declare-function projmake-buildable-event "projmake-mode.el" nil)
 
 ;;;###autoload
 (defun projmake-search-load-project ()
@@ -26,7 +36,9 @@
   (projmake-log PROJMAKE-DEBUG "looking for a dominating build file ")
   (catch 'break
     (dolist (proj-desc projmake-project-descs)
-      (let ((result (apply 'projmake-find-dominating-file-make-project proj-desc)))
+      (let ((result
+             (apply
+              'projmake-find-dominating-file-make-project proj-desc)))
         (when result
           (throw 'break result))))))
 
@@ -34,10 +46,12 @@
   "Look for the topmost dominating file with the specified file name"
   (let* ((project-dir (locate-dominating-file dirname filename)))
     (if project-dir
-        (let* ((parent-dir (file-name-directory (directory-file-name project-dir)))
-               (top-project-dir (if (and parent-dir (not (string= parent-dir "/")))
-                                    (projmake-find-dominating-top parent-dir filename)
-                                  nil))
+        (let* ((parent-dir
+                (file-name-directory (directory-file-name project-dir)))
+               (top-project-dir
+                (if (and parent-dir (not (string= parent-dir "/")))
+                    (projmake-find-dominating-top parent-dir filename)
+                  nil))
                (return-dir
                 (if top-project-dir
                     top-project-dir
@@ -50,21 +64,30 @@
 (defun projmake-make-generic-prj (project-type project-dir dominating-name cmd)
   "Make a project out of the project dir and the dominating
 name. Build the project with the provided command"
-  (projmake-log PROJMAKE-DEBUG "Creating project at %s for a %s project to be built with command '%s'"
+  (projmake-log PROJMAKE-DEBUG
+                "Creating project at %s for a %s project
+to be built with command '%s'"
                 project-dir project-type cmd)
-  (let* ((filename (expand-file-name
-                    (concat (file-name-as-directory project-dir) dominating-name)))
+  (let* ((filename
+          (expand-file-name
+           (concat (file-name-as-directory project-dir)
+                   dominating-name)))
          (shell cmd)
          (prj (projmake-prj filename :shell shell)))
     (projmake-add-to-projects prj)
     prj))
 
-(defun projmake-find-dominating-file-make-project (project-type dominating-name cmd)
+(defun projmake-find-dominating-file-make-project
+  (project-type dominating-name cmd)
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
-         (project-dir (projmake-find-dominating-top dirname dominating-name)))
+         (project-dir (projmake-find-dominating-top
+                       dirname
+                       dominating-name)))
     (if project-dir
-        (projmake-make-generic-prj project-type project-dir dominating-name cmd)
+        (projmake-make-generic-prj project-type
+                                   project-dir
+                                   dominating-name cmd)
       nil)))
 
 (defun projmake-find-add-manual-project ()
@@ -72,11 +95,10 @@ name. Build the project with the provided command"
 through the filesystem root looking for the project file
 specified by projmake-project-file-name, usually 'projmake'. When
 it finds that file it loades it using projmake-add-project"
-  (projmake-log PROJMAKE-DEBUG "Searching for generic %s project to add"
-                projmake-project-file-name)
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
-         (project-dir (locate-dominating-file dirname projmake-project-file-name))
+         (project-dir (locate-dominating-file
+                       dirname projmake-project-file-name))
          (project-file (concat project-dir projmake-project-file-name)))
     (if (file-exists-p project-file)
         (projmake-add-project project-file)

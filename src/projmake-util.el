@@ -4,9 +4,9 @@
 ;; Copyright (C) 2012 Eric Merritt
 
 ;; GNU Emacs is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;; it under the terms of the GNU General Public License as published
+;; by the Free Software Foundation, either version 3 of the License,
+;; or (at your option) any later version.
 
 ;; GNU Emacs is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -15,14 +15,17 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
-(require 'cl)
-
+(with-no-warnings
+  (require 'cl))
 
 (defconst PROJMAKE-NONE -1)
 (defconst PROJMAKE-ERROR 0)
 (defconst PROJMAKE-WARNING 1)
 (defconst PROJMAKE-INFO 2)
 (defconst PROJMAKE-DEBUG 3)
+
+;; Defined in project root
+(defvar projmake-log-level)
 
 (defun projmake-log (level text &rest args)
   "Log a message at level LEVEL.
@@ -65,9 +68,14 @@ are the string substitutions (see `format')."
 
 (defmacro projmake-do-for-project-buffers (project &rest actions)
   `(dolist (buffer (buffer-list))
-    (when (projmake-is-buffer-part-of-project ,project buffer)
-      (with-current-buffer buffer
-        ,@actions))))
+     (when (projmake-is-buffer-part-of-project ,project buffer)
+       (with-current-buffer buffer
+         ,@actions))))
 
 
 (provide 'projmake-util)
+
+;; Local Variables:
+;; coding: utf-8
+;; lexical-binding: t
+;; End:

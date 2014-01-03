@@ -1,4 +1,4 @@
-;; -*- coding: utf-8; lexical-binding: t -*-
+;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2012 Eric Merritt
 ;;
 ;; GNU Emacs is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@
 (defun projmake-get-err-count (project type)
   "Return number of errors of specified TYPE for ERR-INFO-LIST."
   (let* ((error-info-list (projmake-project-error-info project))
-         (count (length error-info-list))
          (err-count 0))
     (dolist (err error-info-list)
       (when (string-equal type (projmake-error-info-type err))
@@ -72,7 +71,8 @@ Return last one as residual if it does not end with newline char.
 Returns ((LINES) PESIDUAL)."
   (when (and output (> (length output) 0))
     (let* ((lines (split-string output "[\n\r]+"))
-           (complete (equal "\n" (char-to-string (aref output (1- (length output))))))
+           (complete (equal "\n" (char-to-string
+                                  (aref output (1- (length output))))))
            (residual nil))
       (when (not complete)
         (setf residual (car (last lines)))
@@ -113,6 +113,9 @@ Convert it to flymake internal format."
                    (car col)
                    col))
                 result))))))
+
+;; declared compilation mode
+(defvar compilation-error-regexp-alist-alist)
 
 (defvar projmake-err-line-patterns
   (append
