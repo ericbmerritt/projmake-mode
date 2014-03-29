@@ -226,11 +226,13 @@ process itself.")
 (defun interrupt-existing-and-start-build (process project)
   "If a build process is running interrupt it and start a new
 one. If it does not exist then simple start a new one."
-  (when (and process
-             (eql 'run (process-status process)))
-    (setf (projmake-project-inturrupted project) t)
-    (interrupt-process process))
-  (projmake-start-build-process project))
+  (if (and process
+           (eql 'run (process-status process)))
+      (progn
+        (setf (projmake-project-build-again? project) t)
+        (setf (projmake-project-inturrupted project) t)
+        (interrupt-process process))
+    (projmake-start-build-process project)))
 
 (defun projmake-build-when (project)
   "Kick off the project in the correct way. If the
@@ -280,8 +282,10 @@ build."
           (projmake-delete-overlays project)
           (projmake-banner-building project)
           (projmake-log PROJMAKE-DEBUG
-                        "starting projmake process (%s) on dir %s"
-                        shell-cmd default-directory)
+                        (concat "starting projmake process (%s) on dir %s "
+                                "with parse engine %s")
+                        shell-cmd default-directory
+                        (projmake-parse-engine-call-name project))
           (setq process (apply 'start-process-shell-command
                                (projmake-make-process-name project)
                                (projmake-make-process-name project)
@@ -358,7 +362,6 @@ It's flymake process filter."
            (projmake-log PROJMAKE-ERROR err-str))))
       (kill-buffer (process-buffer process))
       (projmake-post-build exit-status project))))
-
 
 (defun projmake-clear-project-output (project)
   (projmake-banner-clear project)
