@@ -18,10 +18,9 @@
 ;; Overlay management
 (require 'projmake-util)
 (require 'projmake-project)
+(require 'projmake-parse-engine)
 
 (defvar compilation-error-regexp-alist-alist)
-
-(require 'projmake-error-parsing)
 
 (defalias 'projmake-line-beginning-position
   (if (fboundp 'line-beginning-position)
@@ -40,10 +39,10 @@
       (delete-overlay ol)))
   (setf (projmake-project-overlays project) nil))
 
-(defun projmake-highlight-err-lines (project)
+(defun projmake-highlight-err-lines (project error-infos)
   "Highlight error lines in BUFFER using info from project-error-info"
   (save-excursion
-    (dolist (err (projmake-project-error-info project))
+    (dolist (err error-infos)
       (projmake-highlight-line project err))))
 
 (defun projmake-highlight-line (project line-error)
@@ -52,13 +51,13 @@ Perhaps use text from line-error to enhance highlighting."
   (let* ((error-file (expand-file-name
                       (projmake-error-info-file line-error)
                       (projmake-project-dir project)))
-         (error-text (projmake-error-info-text line-error))
          (buffer (get-file-buffer error-file)))
     (projmake-log PROJMAKE-DEBUG "Looking for buffer for %s" error-file)
     (when buffer
       (projmake-log PROJMAKE-DEBUG "Got buffer for %s" error-file)
       (with-current-buffer buffer
-        (goto-line (projmake-error-info-line line-error))
+        (goto-char (point-min))
+        (forward-line (projmake-error-info-line line-error))
         (let* ((line-beg (projmake-line-beginning-position))
                (line-end (projmake-line-end-position))
                (tooltip-text (projmake-error-info-text line-error))

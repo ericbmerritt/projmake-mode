@@ -17,16 +17,21 @@
 ;; Provides a banner used to display information about the build process
 (require 'projmake-util)
 (require 'projmake-project)
+(require 'projmake-parse-engine)
 
 (defun projmake-banner-building (project)
   "Notify the banner that we are building the project"
-  (projmake-notify project "BUILDING ...."))
+  (projmake-banner--notify project "BUILDING ...."))
 
 (defun projmake-banner-show (project)
   "Show a correct banner based on the details of the project itself"
-  (code
+  (setf (projmake-project-warning-count project)
+        (projmake-banner--get-err-count project "w"))
+  (setf (projmake-project-error-count project)
+        (projmake-banner--get-err-count project "e"))
+  (cond
    ((projmake-project-inturrupted project)
-    (projmake-banner--notify "Inturrupted"))
+    (projmake-banner--notify project "Inturrupted"))
    ((not (= 0 (projmake-project-last-exitcode project)))
     (projmake-banner--notify-failed project))
    (t (projmake-banner-clear project))))
@@ -37,18 +42,19 @@
 
 (defun projmake-banner--notify-failed (project)
   ;; Add warning to the top of the file
-  (projmake-notify project
-                   (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
-                           (projmake-project-last-exitcode project)
-                           (projmake-project-error-count project)
-                           (projmake-project-warning-count project))
-                   t))
+  (projmake-banner--notify
+   project
+   (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
+           (projmake-project-last-exitcode project)
+           (projmake-project-error-count project)
+           (projmake-project-warning-count project))
+   t))
 
 (defun projmake-banner--notify (project detail &rest error)
   ;; Add warning to the top of the file
   (projmake-do-for-project-buffers project
-                                   (projmake-banner-update-header
-                                    detail error))
+                                   (projmake-banner--update-header
+                                    detail error)))
 
 
 (defun projmake-banner--pad-header-line (string)
@@ -66,5 +72,14 @@
     (setq header-line-format
           (list :propertize header-line-string
                 'face hface))))
+
+(defun projmake-banner--get-err-count (project type)
+  "Return number of errors of specified TYPE for ERR-INFO-LIST."
+  (let* ((error-info-list (projmake-project-error-info project))
+         (err-count 0))
+    (dolist (err error-info-list)
+      (when (string-equal type (projmake-error-info-type err))
+        (setq err-count (+ err-count 1))))
+    err-count))
 
 (provide 'projmake-banner)

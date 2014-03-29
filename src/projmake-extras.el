@@ -15,10 +15,14 @@
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 (require 'projmake-util)
 (require 'projmake-project)
+(require 'projmake-default-parse-engine)
 
 (defvar projmake-project-descs)
 (defvar projmake-project-file-name)
 (defvar projmake-kill-build-buffer)
+
+(declare-function projmake-default-parse-engine-make
+                  "projmake-default-parse-engine.el" nil)
 
 (declare-function projmake-add-to-projects "projmake-mode.el" (prj))
 (declare-function projmake-add-project "projmake-mode.el"
@@ -61,24 +65,34 @@
           return-dir)
       project-dir)))
 
-(defun projmake-make-generic-prj (project-type project-dir dominating-name cmd)
+(defun projmake-make-generic-prj (project-type
+                                  project-dir
+                                  dominating-name
+                                  cmd
+                                  possible-parse-engine)
   "Make a project out of the project dir and the dominating
 name. Build the project with the provided command"
   (projmake-log PROJMAKE-DEBUG
                 "Creating project at %s for a %s project
 to be built with command '%s'"
                 project-dir project-type cmd)
-  (let* ((filename
+  (let* ((parse-engine (if possible-parse-engine
+                           possible-parse-engine
+                         (projmake-default-parse-engine-make)))
+         (filename
           (expand-file-name
            (concat (file-name-as-directory project-dir)
                    dominating-name)))
          (shell cmd)
-         (prj (projmake-prj filename :shell shell)))
+         (prj (projmake-prj filename
+                            :shell shell
+                            :parse-engine parse-engine)))
+    (projmake-extras--normalize-project prj)
     (projmake-add-to-projects prj)
     prj))
 
 (defun projmake-find-dominating-file-make-project
-  (project-type dominating-name cmd)
+  (project-type dominating-name cmd &optional parse-engine)
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
          (project-dir (projmake-find-dominating-top
@@ -87,14 +101,16 @@ to be built with command '%s'"
     (if project-dir
         (projmake-make-generic-prj project-type
                                    project-dir
-                                   dominating-name cmd)
+                                   dominating-name
+                                   cmd
+                                   parse-engine)
       nil)))
 
 (defun projmake-find-add-manual-project ()
   "Searches the directory tree from the current active buffer up
-through the filesystem root looking for the project file
-specified by projmake-project-file-name, usually 'projmake'. When
-it finds that file it loades it using projmake-add-project"
+through the filesystem root looking for the project file specified by
+projmake-project-file-name, usually 'projmake' or '.projmake'. When it
+finds that file it loades it using projmake-add-project"
   (interactive)
   (let* ((dirname (file-name-directory (buffer-file-name)))
          (project-dir (locate-dominating-file
@@ -118,16 +134,27 @@ involved."
     (buffer-disable-undo)
     (insert-file-contents file)
     (goto-char (point-min))
-    (eval `(labels
-               ((projmake
-                 (&rest args)
-                 (apply (function projmake-prj) ,file args)))
-             ,(read (current-buffer))))))
+    (projmake-extras--normalize-project
+     (eval `(cl-labels
+                ((projmake
+                  (&rest args)
+                  (apply (function projmake-prj) ,file args)))
+              ,(read (current-buffer)))))))
 
 (defun projmake-toggle-kill-build-buffer ()
   "Toggle killing of the build buffer after a build"
   (interactive)
   (setf projmake-kill-build-buffer (not projmake-kill-build-buffer))
   (projmake-buildable-event))
+
+(defun projmake-extras--normalize-project (project)
+  "Normalize a build project, fixing deficiencies in definitions"
+  (if (projmake-project-parse-engine project)
+      project
+    (progn
+      (setf (projmake-project-parse-engine project)
+            (projmake-default-parse-engine-make))
+      project)))
+
 
 (provide 'projmake-extras)

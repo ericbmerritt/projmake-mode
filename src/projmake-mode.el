@@ -14,17 +14,15 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+(require 'cl-lib)
 
-(with-no-warnings
-  (require 'cl))
-
-(require 'compile)
 (require 'projmake-util)
 (require 'projmake-project)
-(require 'projmake-error-parsing)
 (require 'projmake-markup)
 (require 'projmake-extras)
 (require 'projmake-banner)
+(require 'projmake-parse-engine)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Custom vars controlling projmake behaviour
@@ -72,8 +70,8 @@ of each project"
 ;;;###autoload
 (defcustom projmake-build-now! t
   "Indicates whether the current build (if one exists) is killed and
-  restarted when ever a relevant build event occurs. If t the current
-  running build is killed and a new build started. If nil a marker is
+  restarted when ever a relevant build event occurs. If t, the current
+  running build is killed and a new build started. If nil, a marker is
   set on the project such that when the build terminates naturally a
   new build is started immediately"
   :group 'projmake
@@ -185,40 +183,6 @@ projmake file."
         (push (cons file prj) projmake-projects)
         prj))))
 
-(defun projmake-find-project-by-file (file)
-  "This searches the list of projects search for the project
-associated with this buffer. The buffer related projet is defined
-as anything under the directory where the project configuration
-file exists."
-  (projmake-log PROJMAKE-DEBUG
-                "Looking for project for file: %s" file)
-  ;;we do this to ignore cl warnings about find-if. Wish we could turn
-  ;;off that globally
-  (with-no-warnings
-    (cdr (find-if (lambda (prj-kv)
-                    (let* ((prj (cdr prj-kv)))
-                      (projmake-is-file-part-of-project prj file)))
-                  projmake-projects))))
-
-(defun projmake-find-project-by-buffer (buffer)
-  "Grab the filename from the buffer and use
-projmake-find-project-by-file to find the related project."
-  (projmake-find-project-by-file (buffer-file-name buffer)))
-
-(defun projmake-is-file-part-of-project (prj file)
-  "Given a project and a file tests to see if the file belongs to the
-project"
-  (let ((projmake-dir (projmake-project-dir prj)))
-    (eql t (compare-strings projmake-dir
-                            0 nil
-                            file 0 (length projmake-dir)))))
-
-(defun projmake-is-buffer-part-of-project (prj buffer)
-  "Given a project and a buffer tests to see if the file belongs to
-the project"
-  (if (buffer-file-name buffer)
-      (projmake-is-file-part-of-project prj (buffer-file-name buffer))
-    nil))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Active Projects
 
@@ -301,15 +265,18 @@ build."
          (ctx-proc-filter (lambda (proc output)
                             (projmake-process-filter
                              project proc output)))
-         (ctx-proc-sentinel (lambda (proc)
+         (ctx-proc-sentinel (lambda (proc _event)
                               (projmake-process-sentinel
-                               project proc))))
+                               project proc)))
+         (parse-state (call-projmake-parse-engine-init project)))
+    (setf (projmake-project-parse-engine-state project) parse-state)
     (condition-case err
         (progn
-          (projmake-clear-project-output project)
           ;; Clean up the project markup up since we are building
           ;; again
-          (projmake-banner-building)
+          (projmake-clear-project-output project)
+          (projmake-delete-overlays project)
+          (projmake-banner-building project)
           (projmake-log PROJMAKE-DEBUG
                         "starting projmake process (%s) on dir %s"
                         shell-cmd default-directory)
@@ -321,10 +288,8 @@ build."
           (set-process-filter process ctx-proc-filter)
           (push (cons (projmake-project-file project) process)
                 projmake-processes)
-
           (incf (projmake-project-build-counter project))
           (setf (projmake-project-is-building? project) t)
-
           (projmake-log PROJMAKE-INFO
                         "started process %d, command=%s, dir=%s"
                         (process-id process) (process-command process)
@@ -348,7 +313,9 @@ It's flymake process filter."
                   (length output)
                   (process-id process))
     (when (buffer-live-p source-buffer)
-      (projmake-parse-output-and-residual project output))
+      (let ((error-infos
+             (call-projmake-parse-engine-parse-output project output)))
+        (projmake-highlight-err-lines project error-infos)))
     (projmake-populate-process-buffer project output)))
 
 (defun projmake-populate-process-buffer (project string)
@@ -367,22 +334,22 @@ It's flymake process filter."
   (when (memq (process-status process) '(signal exit))
     (let* ((exit-status  (process-exit-status process))
            (source-buffer (process-buffer process)))
-
       (projmake-log PROJMAKE-INFO "process %d exited with code %d"
                     (process-id process) exit-status)
-
       (condition-case err
           (progn
             (delete-process process)
             (setf projmake-processes
                   (assq-delete-all (projmake-project-file project)
                                    projmake-processes))
-            (projmake-parse-residual project))
+            (projmake-highlight-err-lines
+             project
+             (call-projmake-parse-engine-stop project)))
         (error
-         (let ((err-str (format "Error in process sentinel for buffer %s: %s"
-                                source-buffer (error-message-string err))))
+         (let ((err-str
+                (format "Error in process sentinel for buffer %s: %s"
+                        source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-
       (kill-buffer (process-buffer process))
       (projmake-post-build exit-status project))))
 
@@ -395,18 +362,14 @@ It's flymake process filter."
 
 (defun projmake-post-build (exitcode project)
   (setf (projmake-project-last-exitcode project) exitcode)
-  (projmake-delete-overlays project)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
   (projmake-banner-show project)
   (cond
    ((projmake-project-inturrupted project)
     (setf (projmake-project-inturrupted project) nil))
-   ((not (= 0 exitcode))
-    (projmake-highlight-err-lines project))
-   (t (projmake-erase-build-buffer project)))
+   ((= 0 exitcode)
+    (projmake-erase-build-buffer project)))
 
-
-(projmake-notify-failed exitcode project)
   (projmake-cleanup-transient-project-data project)
 
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
