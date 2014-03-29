@@ -47,10 +47,12 @@
   ;; The path to the file either relative to the the project root or absolute
   file
   line
+  (char 0)
+  (end-char 0)
   ;; The line in the compile output that reported this error
   output-line
   ;; The type should be a string of either 'e' or 'w'
-  type
+  (type "e")
   ;; The text of the error
   text)
 
@@ -60,21 +62,20 @@
 
 (defun call-projmake-parse-engine-init (project)
   "Make it easy to call the current parse engine"
-  (projmake-log PROJMAKE-ERROR "-->%s" project
-                )
   (funcall (projmake-parse-engine-init
             (projmake-project-parse-engine project))))
 
 (defun call-projmake-parse-engine-parse-output (project output)
   "Helper function to call parse output on the current parse engine"
-  (let ((engine-state (projmake-project-parse-engine-state project))
-        (parse-engine-parse-output
-         (projmake-parse-engine-parse-output
-          (projmake-project-parse-engine project))))
-    (pcase (funcall parse-engine-parse-output engine-state output)
-      (`(,new-state ,error-infos)
-       (setf (projmake-project-parse-engine-state project) new-state)
-       error-infos))))
+  (let* ((engine-state (projmake-project-parse-engine-state project))
+         (parse-engine-parse-output
+          (projmake-parse-engine-parse-output
+           (projmake-project-parse-engine project)))
+         (result (funcall parse-engine-parse-output engine-state output))
+         (new-state (car result))
+         (error-infos (cadr result)))
+    (setf (projmake-project-parse-engine-state project) new-state)
+    error-infos))
 
 (defun call-projmake-parse-engine-stop (project)
   (let* ((engine-state (projmake-project-parse-engine-state project))
