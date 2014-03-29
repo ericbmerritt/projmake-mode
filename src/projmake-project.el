@@ -1,41 +1,49 @@
-;; -*- coding: utf-8; lexical-binding: t -*-
+;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2012 Eric Merritt
 ;;
 ;; GNU Emacs is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
+;; it under the terms of the GNU General Public License as published
+;; by the Free Software Foundation, either version 3 of the License,
+;; or (at your option) any later version.
 
-;; GNU Emacs is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
+;; GNU Emacs is distributed in the hope that it will be useful, but
+;; WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+;; General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Overlay management
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Project definition and initialization
-(defstruct projmake-project
+(require 'cl-lib)
+
+(declare-function projmake-default-parse-engine-make
+                  "projmake-default-parse-engine.el"
+                  nil)
+
+(cl-defstruct projmake-project
   file
   dir
   name
   shell
+  parse-engine
+  last-exitcode
   warning-count
   error-count
   inturrupted
   (build-counter 0)
   ;; mutable build oriented bits
-  residual
+  parse-engine-state
   error-info
   overlays
   (build? t)
   (is-building? nil)
   (build-again? nil))
 
-(defun* projmake-prj (file &key name shell)
+(defun* projmake-prj (file &key name shell parse-engine)
   "Creates a project object for projmake-prj."
   (let ((dir (file-name-directory file)))
     (make-projmake-project
@@ -53,6 +61,7 @@
                    (split-string shell "[ \n\t]+"))
                   (t
                    (error "Shell command required!")))
+     :parse-engine parse-engine
      :build? t
      :is-building? nil
      :build-again? nil)))
@@ -70,7 +79,7 @@
 (defun projmake-cleanup-transient-project-data (project)
   "Clean up the build oriented bits of the project"
   (setf (projmake-project-inturrupted project) nil)
-  (setf (projmake-project-residual project) nil)
+  (setf (projmake-project-parse-engine-state project) nil)
   (setf (projmake-project-is-building? project) nil))
 
 (provide 'projmake-project)

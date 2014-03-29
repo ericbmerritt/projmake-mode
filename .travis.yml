@@ -1,0 +1,59 @@
+###
+### Notes
+###
+### The travis web interface may choke silently and fail to
+### update when there are issues with the .travis.yml file.
+###
+### The "travis-lint" command-line tool does not catch all
+### errors which may lead to silent failure.
+###
+### Shell-style comments in this file must have "#" as the
+### *first* character of the line.
+###
+
+###
+### language
+###
+
+language: emacs-lisp
+
+###
+### runtime initialization
+###
+### notes
+###
+### emacs24 (current stable release) is obtained from the
+### cassou PPA: http://launchpad.net/~cassou/+archive/emacs
+###
+
+install:
+  - sudo add-apt-repository -y ppa:cassou/emacs &&
+    sudo apt-get -qq update &&
+    sudo apt-get -qq -f install &&
+    sudo apt-get -qq install emacs24 emacs24-el;
+
+###
+### the actual build/test command
+###
+### (use "make test-batch" to test without byte-compiling)
+###
+
+script:
+  make
+
+###
+### settings
+###
+
+notifications:
+  email: false
+
+#
+# Emacs
+#
+# Local Variables:
+# indent-tabs-mode: nil
+# coding: utf-8
+# End:
+#
+n
