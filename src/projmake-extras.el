@@ -85,9 +85,10 @@ to be built with command '%s'"
            (concat (file-name-as-directory project-dir)
                    dominating-name)))
          (shell cmd)
-         (prj (projmake-prj filename
-                            :shell shell
-                            :parse-engine parse-engine)))
+         (prj (projmake-project--make-project
+               filename
+               :shell shell
+               :parse-engine parse-engine)))
     (projmake-extras--normalize-project prj)
     (projmake-add-to-projects prj)
     prj))
@@ -139,7 +140,7 @@ involved."
      (eval `(cl-labels
                 ((projmake
                   (&rest args)
-                  (apply (function projmake-prj) ,file args)))
+                  (apply (function projmake-project--make-project) ,file args)))
               ,(read (current-buffer)))))))
 
 (defun projmake-toggle-kill-build-buffer ()

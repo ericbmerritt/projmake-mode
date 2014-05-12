@@ -18,6 +18,7 @@
 
 (require 'projmake-util)
 (require 'projmake-project)
+(require 'projmake-build-state)
 (require 'projmake-markup)
 (require 'projmake-extras)
 (require 'projmake-banner)
@@ -66,16 +67,6 @@
 of each project"
   :group 'projmake
   :type 'string)
-
-;;;###autoload
-(defcustom projmake-build-now! t
-  "Indicates whether the current build (if one exists) is killed and
-  restarted when ever a relevant build event occurs. If t, the current
-  running build is killed and a new build started. If nil, a marker is
-  set on the project such that when the build terminates naturally a
-  new build is started immediately"
-  :group 'projmake
-  :type 'boolean)
 
 ;;;###autoload
 (defcustom projmake-log-level -1
@@ -151,10 +142,7 @@ to"
 (defun projmake-off ()
   "Turn projmake off "
   (interactive)
-  (let ((project (projmake-find-project-by-buffer (current-buffer))))
-    (projmake-clear-project-output project))
-
-  (setq projmake-toggled nil)
+  (projmake-toggle-off)
   (remove-hook 'after-save-hook 'projmake-buildable-event
                'local)) ;Only in the current buffer
 
@@ -165,6 +153,13 @@ to"
 (defvar projmake-projects nil
   "This is where all the active projects currently loaded are
 stored")
+
+(defun projmake-toggle-off ()
+  "Cleanup building and toggle it off"
+  (let ((project (projmake-project--find-by-buffer projmake-projects
+                                                   (current-buffer))))
+    (projmake-clear-project-output project))
+  (setq projmake-toggled nil))
 
 (defun projmake-clear-projects ()
   "Clears projects out of the projects variable. This is useful when
@@ -212,10 +207,6 @@ The expression should evaluate to a bg-build project object."
 processes where the key is the project file and the value is the
 process itself.")
 
-(defun projmake-get-process (project)
-  (let ((file (projmake-project-file project)))
-    (cdr (assoc file projmake-processes))))
-
 (defun projmake-make-process-name (project)
   (concat "projmake-build["
           (projmake-project-name project) ":"
@@ -223,27 +214,14 @@ process itself.")
            (projmake-project-build-counter project))
           "]"))
 
-(defun interrupt-existing-and-start-build (process project)
+(defun projmake-interrupt-existing-and-start-build (project)
   "If a build process is running interrupt it and start a new
 one. If it does not exist then simple start a new one."
-  (if (and process
-           (eql 'run (process-status process)))
-      (progn
-        (setf (projmake-project-build-again? project) t)
-        (setf (projmake-project-inturrupted project) t)
+  (let ((process (projmake-project-process project)))
+    (if (and process
+             (eql 'run (process-status process)))
         (interrupt-process process))
     (projmake-start-build-process project)))
-
-(defun projmake-build-when (project)
-  "Kick off the project in the correct way. If the
-projmake-build-now! variable interrupt the current build and kick
-off a new build otherwise just mark for rebuild."
-  (let ((process (projmake-get-process project)))
-    (if projmake-build-now!
-        (interrupt-existing-and-start-build process project)
-      (if process
-          (setf (projmake-project-build-again? project) t)
-        (projmake-start-build-process project)))))
 
 (defun projmake-buildable-event ()
   "buildable event occures (this is
@@ -251,68 +229,67 @@ almost always just a save). It will do the 'rigth thing' for the
 build."
   (interactive)
   (let ((project
-         (projmake-find-project-by-buffer (current-buffer))))
+         (projmake-project--find-by-buffer projmake-projects (current-buffer))))
     (if project
-        (if (projmake-project-build? project)
-            (projmake-build-when project)
-          (projmake-log PROJMAKE-INFO
-                        "No related project for buffer %s"
-                        (buffer-file-name (current-buffer))))
-      (projmake-log PROJMAKE-INFO "No related project for buffer %s"
+        (projmake-interrupt-existing-and-start-build project)
+      (projmake-log PROJMAKE-INFO
+                    "No related project for buffer %s"
                     (buffer-file-name (current-buffer))))))
 
 (defun projmake-start-build-process (project)
   "Start syntax check process."
-  (let* ((process nil)
+  (let* ((build-state (projmake-build-state project))
+         (process nil)
          (default-directory (projmake-project-dir project))
          (shell-cmd (projmake-project-shell project))
          (ctx-proc-filter (lambda (proc output)
                             (projmake-process-filter
-                             project proc output)))
-         (ctx-proc-sentinel (lambda (proc _event)
+                             build-state proc output)))
+         (ctx-proc-sentinel (lambda (proc event)
                               (projmake-process-sentinel
-                               project proc)))
-         (parse-state (call-projmake-parse-engine-init project)))
-    (setf (projmake-project-parse-engine-state project) parse-state)
-    (condition-case err
+                               build-state proc event)))
+         (parse-state (projmake-project--parse-engine-init project)))
+    (setf (projmake-build-state-parse-engine-state build-state) parse-state)
+    (condition-case-unless-debug err
         (progn
           ;; Clean up the project markup up since we are building
           ;; again
           (projmake-clear-project-output project)
-          (projmake-delete-overlays project)
-          (projmake-banner-building project)
+          (projmake-banner-building build-state)
           (projmake-log PROJMAKE-DEBUG
                         (concat "starting projmake process (%s) on dir %s "
                                 "with parse engine %s")
                         shell-cmd default-directory
-                        (projmake-parse-engine-call-name project))
+                        (projmake-project--parse-engine-name project))
           (setq process (apply 'start-process-shell-command
                                (projmake-make-process-name project)
                                (projmake-make-process-name project)
                                shell-cmd))
+          (setf (projmake-project-process project) process)
           (set-process-sentinel process ctx-proc-sentinel)
           (set-process-filter process ctx-proc-filter)
           (push (cons (projmake-project-file project) process)
                 projmake-processes)
           (incf (projmake-project-build-counter project))
-          (setf (projmake-project-is-building? project) t)
           (projmake-log PROJMAKE-INFO
                         "started process %d, command=%s, dir=%s"
-                        (process-id process) (process-command process)
+                        (process-id process)
+                        (process-command process)
                         default-directory)
           process)
       (error
        (let* ((err-str
                (format
-                "Failed to launch syntax check process '%s'
+                "Failed to launch build '%s'
 with args %s"
                 (mapconcat 'identity shell-cmd " ")
                 (error-message-string err))))
          (projmake-log PROJMAKE-ERROR err-str))))))
 
-(defun projmake-process-filter (project process output)
+(defun projmake-process-filter (build-state process output)
   "Parse OUTPUT and highlight error lines.
 It's flymake process filter."
+  (projmake-banner-building build-state)
   (let ((source-buffer (process-buffer process)))
     (projmake-log PROJMAKE-DEBUG
                   "received %d byte(s) of output from process %d"
@@ -320,17 +297,20 @@ It's flymake process filter."
                   (process-id process))
     (when (buffer-live-p source-buffer)
       (let ((error-infos
-             (call-projmake-parse-engine-parse-output project output))
-            (project-errors (projmake-project-error-info project)))
+             (projmake-build-state-parse-output build-state output))
+            (project-errors (projmake-build-state-error-info build-state)))
         (when error-infos
-          (setf (projmake-project-error-info project)
+          (setf (projmake-build-state-error-info build-state)
                 (append project-errors error-infos))
-          (projmake-highlight-err-lines project error-infos)))
-      (projmake-populate-process-buffer project output))))
+          (projmake-markup--highlight-err-lines
+           (projmake-build-state-project build-state)
+           error-infos)))
+      (projmake-populate-process-buffer build-state output))))
 
-(defun projmake-populate-process-buffer (project string)
+(defun projmake-populate-process-buffer (build-state string)
   (let ((output-buffer (get-buffer-create
-                        (projmake-build-buffer-name project))))
+                        (projmake-build-buffer-name
+                         (projmake-build-state-project build-state)))))
     (with-current-buffer output-buffer
       (save-excursion
         (setf buffer-read-only nil)
@@ -339,69 +319,60 @@ It's flymake process filter."
         (insert string)
         (setf buffer-read-only t)))))
 
-(defun projmake-process-sentinel (project process)
+(defun projmake-process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
   (when (memq (process-status process) '(signal exit))
-    (let* ((exit-status  (process-exit-status process))
-           (source-buffer (process-buffer process)))
+    (let ((exit-status  (process-exit-status process))
+          (source-buffer (process-buffer process)))
+
+      (projmake-log PROJMAKE-INFO "Process received event %s for buffer %s"
+                    event
+                    (buffer-name))
+
+      (when (string= "interrupt: 2\n" event)
+        (setf (projmake-build-state-inturrupted build-state) t))
+
       (projmake-log PROJMAKE-INFO "process %d exited with code %d"
                     (process-id process) exit-status)
-      (condition-case err
+
+      (condition-case-unless-debug err
           (progn
             (delete-process process)
             (setf projmake-processes
-                  (assq-delete-all (projmake-project-file project)
+                  (assq-delete-all (projmake-project-file
+                                    (projmake-build-state-project build-state))
                                    projmake-processes))
-            (projmake-highlight-err-lines
-             project
-             (call-projmake-parse-engine-stop project)))
+            (projmake-markup--highlight-err-lines
+             (projmake-build-state-project build-state)
+             (projmake-build-state-parse-engine-stop build-state)))
         (error
          (let ((err-str
                 (format "Error in process sentinel for buffer %s: %s"
                         source-buffer (error-message-string err))))
            (projmake-log PROJMAKE-ERROR err-str))))
-      (kill-buffer (process-buffer process))
-      (projmake-post-build exit-status project))))
+      (projmake-post-build build-state exit-status))))
 
 (defun projmake-clear-project-output (project)
   (projmake-banner-clear project)
-  (projmake-delete-overlays project)
-  (setf (projmake-project-error-info project) nil)
+  (projmake-markup--delete-overlays project)
   (projmake-erase-build-buffer project))
 
-(defun projmake-post-build (exitcode project)
-  (setf (projmake-project-last-exitcode project) exitcode)
+(defun projmake-post-build (build-state exitcode)
+  (setf (projmake-project-last-exitcode
+         (projmake-build-state-project build-state))
+        exitcode)
+  (setf (projmake-build-state-exitcode build-state) exitcode)
   (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
-  (projmake-banner-show project)
-  (cond
-   ((projmake-project-inturrupted project)
-    (setf (projmake-project-inturrupted project) nil))
-   ((= 0 exitcode)
-    (projmake-erase-build-buffer project)))
-
-  (projmake-cleanup-transient-project-data project)
+  (projmake-banner-show build-state)
+  (when (= 0 exitcode)
+    (projmake-erase-build-buffer (projmake-build-state-project build-state)))
 
   (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
                 (buffer-name)
-                (projmake-project-error-count project)
-                (projmake-project-warning-count project))
-
-  (when (projmake-project-build-again? project)
-    (setf (projmake-project-build-again? project) nil)
-    (projmake-build-when project)))
-
-(defun projmake-build-buffer-name (project)
-  (let ((project-name (projmake-project-name project)))
-    (concat "Build Output [" project-name "]")))
+                (projmake-build-state-error-count build-state)
+                (projmake-build-state-warning-count build-state)))
 
 (defun projmake-erase-build-buffer (project)
-  (let ((build-buffer (get-buffer (projmake-build-buffer-name project))))
-    (when (buffer-live-p build-buffer)
-      (with-current-buffer build-buffer
-        (save-excursion
-          (setf buffer-read-only nil)
-          (erase-buffer)
-          (setf buffer-read-only t))))))
-
+  (kill-buffer (projmake-process-buffer project))
 
 (provide 'projmake-mode)

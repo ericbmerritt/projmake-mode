@@ -56,35 +56,6 @@
   ;; The text of the error
   text)
 
-(defun projmake-parse-engine-call-name (project)
-  "Make it easy to call the current parse engine name"
-  (projmake-parse-engine-name (projmake-project-parse-engine project)))
-
-(defun call-projmake-parse-engine-init (project)
-  "Make it easy to call the current parse engine"
-  (funcall (projmake-parse-engine-init
-            (projmake-project-parse-engine project))))
-
-(defun call-projmake-parse-engine-parse-output (project output)
-  "Helper function to call parse output on the current parse engine"
-  (let* ((engine-state (projmake-project-parse-engine-state project))
-         (parse-engine-parse-output
-          (projmake-parse-engine-parse-output
-           (projmake-project-parse-engine project)))
-         (result (funcall parse-engine-parse-output engine-state output))
-         (new-state (car result))
-         (error-infos (cadr result)))
-    (setf (projmake-project-parse-engine-state project) new-state)
-    error-infos))
-
-(defun call-projmake-parse-engine-stop (project)
-  (let* ((engine-state (projmake-project-parse-engine-state project))
-         (parse-engine-stop
-          (projmake-parse-engine-stop
-           (projmake-project-parse-engine project)))
-         (error-infos (funcall parse-engine-stop engine-state)))
-    (setf (projmake-project-parse-engine-state project) nil)
-    error-infos))
 
 (defun projmake-parse-engine-split-output (residual new-output)
   "Split OUTPUT into lines.

@@ -31,19 +31,11 @@
   shell
   parse-engine
   last-exitcode
-  warning-count
-  error-count
-  inturrupted
+  process
   (build-counter 0)
-  ;; mutable build oriented bits
-  parse-engine-state
-  error-info
-  overlays
-  (build? t)
-  (is-building? nil)
-  (build-again? nil))
+  (build? t))
 
-(defun* projmake-prj (file &key name shell parse-engine)
+(defun* projmake-project--make-project (file &key name shell parse-engine)
   "Creates a project object for projmake-prj."
   (let ((dir (file-name-directory file)))
     (make-projmake-project
@@ -61,25 +53,56 @@
                    (split-string shell "[ \n\t]+"))
                   (t
                    (error "Shell command required!")))
-     :parse-engine parse-engine
-     :build? t
-     :is-building? nil
-     :build-again? nil)))
+     :parse-engine parse-engine)))
 
-(defun projmake-project-has-warnings? (project)
-  (> (projmake-project-warning-count project) 0))
+(defun projmake-project--parse-engine-name (project)
+  "Make it easy to call the current parse engine name"
+  (projmake-parse-engine-name (projmake-project-parse-engine project)))
 
-(defun projmake-project-has-errors? (project)
-  (> (projmake-project-error-count project) 0))
+(defun projmake-project--parse-engine-init (project)
+  "Make it easy to call the current parse engine"
+  (funcall (projmake-parse-engine-init
+            (projmake-project-parse-engine project))))
 
-(defun projmake-project-has-errors-or-warnings? (project)
-  (or (projmake-project-has-warnings? project)
-      (projmake-project-has-errors? project)))
+(defun projmake-project--find-by-file (projects file)
+  "This searches the list of projects search for the project
+associated with this buffer. The buffer related projet is defined
+as anything under the directory where the project configuration
+file exists."
+  (projmake-log PROJMAKE-DEBUG
+                "Looking for project for file: %s" file)
+  ;;we do this to ignore cl warnings about find-if. Wish we could turn
+  ;;off that globally
+  (with-no-warnings
+    (cdr (find-if (lambda (prj-kv)
+                    (let* ((prj (cdr prj-kv)))
+                      (projmake-project--is-file-part-of-project prj file)))
+                  projects))))
 
-(defun projmake-cleanup-transient-project-data (project)
-  "Clean up the build oriented bits of the project"
-  (setf (projmake-project-inturrupted project) nil)
-  (setf (projmake-project-parse-engine-state project) nil)
-  (setf (projmake-project-is-building? project) nil))
+(defun projmake-project--find-by-buffer (projects buffer)
+  "Grab the filename from the buffer and use
+projmake-find-project-by-file to find the related project."
+  (projmake-project--find-by-file projects (buffer-file-name buffer)))
+
+(defun projmake-project--is-file-part-of-project (prj file)
+  "Given a project and a file tests to see if the file belongs to the
+project"
+  (let ((projmake-dir (projmake-project-dir prj)))
+    (eql t (compare-strings projmake-dir
+                            0 nil
+                            file 0 (length projmake-dir)))))
+
+(defun projmake-project--is-buffer-part-of-project? (prj buffer)
+  "Given a project and a buffer tests to see if the file belongs to
+the project"
+  (if (buffer-file-name buffer)
+      (projmake-project--is-file-part-of-project prj (buffer-file-name buffer))
+    nil))
+
+(defmacro projmake-project--do-for-project-buffers (project &rest actions)
+  `(dolist (buffer (buffer-list))
+     (when (projmake-project--is-buffer-part-of-project? ,project buffer)
+       (with-current-buffer buffer
+         ,@actions))))
 
 (provide 'projmake-project)
