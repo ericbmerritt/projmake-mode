@@ -18,32 +18,31 @@
 (require 'projmake-util)
 (require 'projmake-project)
 (require 'projmake-build-state)
-(require 'projmake-parse-engine)
 
-(defun projmake-banner-building (project)
+(defun projmake-banner/building (project)
   "Notify the banner that we are building the project"
-  (projmake-banner--notify project "BUILDING ...."))
+  (projmake-banner/notify project "BUILDING ...."))
 
-(defun projmake-banner-show (build-state)
+(defun projmake-banner/show (build-state)
   "Show a correct banner based on the details of the project itself"
   (setf (projmake-build-state-warning-count build-state)
-        (projmake-banner--get-err-count build-state "w"))
+        (projmake-banner/get-err-count build-state "w"))
   (setf (projmake-build-state-error-count build-state)
-        (projmake-banner--get-err-count build-state "e"))
+        (projmake-banner/get-err-count build-state "e"))
   (cond
    ((projmake-build-state-inturrupted build-state)
-    (projmake-banner--notify build-state "Inturrupted"))
+    (projmake-banner/notify build-state "Inturrupted"))
    ((not (= 0 (projmake-build-state-exitcode build-state)))
-    (projmake-banner--notify-failed build-state))
-   (t (projmake-banner-clear (projmake-build-state-project build-state)))))
+    (projmake-banner/notify-failed build-state))
+   (t (projmake-banner/clear (projmake-build-state-project build-state)))))
 
-(defun projmake-banner-clear (project)
-  (projmake-project--do-for-project-buffers project
-                                            (setf header-line-format nil)))
+(defun projmake-banner/clear (project)
+  (projmake-project/do-for-project-buffers project
+                                           (setf header-line-format nil)))
 
-(defun projmake-banner--notify-failed (build-state)
+(defun projmake-banner/notify-failed (build-state)
   ;; Add warning to the top of the file
-  (projmake-banner--notify
+  (projmake-banner/notify
    build-state
    (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
            (projmake-build-state-exitcode build-state)
@@ -51,22 +50,22 @@
            (projmake-build-state-warning-count build-state))
    t))
 
-(defun projmake-banner--notify (build-state detail &rest error)
+(defun projmake-banner/notify (build-state detail &rest error)
   ;; Add warning to the top of the file
-  (projmake-project--do-for-project-buffers
+  (projmake-project/do-for-project-buffers
    (projmake-build-state-project build-state)
-   (projmake-banner--update-header detail error)))
+   (projmake-banner/update-header detail error)))
 
 
-(defun projmake-banner--pad-header-line (string)
+(defun projmake-banner/pad-header-line (string)
   (let* ((size (window-total-width))
          (padding (- size (length string)))
          (pad (+ (length string) padding))
          (line-format (format "%%%ds" (- pad))))
     (format line-format string)))
 
-(defun projmake-banner--update-header (str &rest error)
-  (let ((header-line-string (projmake-banner--pad-header-line str))
+(defun projmake-banner/update-header (str &rest error)
+  (let ((header-line-string (projmake-banner/pad-header-line str))
         (hface (if error
                    'projmake-notify-err
                  'projmake-notify-normal)))
@@ -74,7 +73,7 @@
           (list :propertize header-line-string
                 'face hface))))
 
-(defun projmake-banner--get-err-count (build-state type)
+(defun projmake-banner/get-err-count (build-state type)
   "Return number of errors of specified TYPE for ERR-INFO-LIST."
   (let* ((error-info-list (projmake-build-state-error-info build-state))
          (err-count 0))

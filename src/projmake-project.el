@@ -19,8 +19,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Project definition and initialization
 (require 'cl-lib)
+(require 'projmake-log)
 
-(declare-function projmake-default-parse-engine-make
+(declare-function projmake-default-parse-engine/make
                   "projmake-default-parse-engine.el"
                   nil)
 
@@ -35,8 +36,8 @@
   (build-counter 0)
   (build? t))
 
-(defun* projmake-project--make-project (file &key name shell parse-engine)
-  "Creates a project object for projmake-prj."
+(cl-defun projmake-project/make-project (file &key name shell parse-engine)
+  "Creates a project object for projmake-prjoject."
   (let ((dir (file-name-directory file)))
     (make-projmake-project
      :file  file
@@ -55,36 +56,35 @@
                    (error "Shell command required!")))
      :parse-engine parse-engine)))
 
-(defun projmake-project--parse-engine-name (project)
+(defun projmake-project/parse-engine-name (project)
   "Make it easy to call the current parse engine name"
   (projmake-parse-engine-name (projmake-project-parse-engine project)))
 
-(defun projmake-project--parse-engine-init (project)
+(defun projmake-project/parse-engine-init (project)
   "Make it easy to call the current parse engine"
   (funcall (projmake-parse-engine-init
             (projmake-project-parse-engine project))))
 
-(defun projmake-project--find-by-file (projects file)
+(defun projmake-project/find-by-file (projects file)
   "This searches the list of projects search for the project
 associated with this buffer. The buffer related projet is defined
 as anything under the directory where the project configuration
 file exists."
-  (projmake-log PROJMAKE-DEBUG
-                "Looking for project for file: %s" file)
+  (projmake-log/debug "Looking for project for file: %s" file)
   ;;we do this to ignore cl warnings about find-if. Wish we could turn
   ;;off that globally
   (with-no-warnings
     (cdr (find-if (lambda (prj-kv)
                     (let* ((prj (cdr prj-kv)))
-                      (projmake-project--is-file-part-of-project prj file)))
+                      (projmake-project/is-file-part-of-project prj file)))
                   projects))))
 
-(defun projmake-project--find-by-buffer (projects buffer)
+(defun projmake-project/find-by-buffer (projects buffer)
   "Grab the filename from the buffer and use
 projmake-find-project-by-file to find the related project."
-  (projmake-project--find-by-file projects (buffer-file-name buffer)))
+  (projmake-project/find-by-file projects (buffer-file-name buffer)))
 
-(defun projmake-project--is-file-part-of-project (prj file)
+(defun projmake-project/is-file-part-of-project (prj file)
   "Given a project and a file tests to see if the file belongs to the
 project"
   (let ((projmake-dir (projmake-project-dir prj)))
@@ -92,16 +92,16 @@ project"
                             0 nil
                             file 0 (length projmake-dir)))))
 
-(defun projmake-project--is-buffer-part-of-project? (prj buffer)
+(defun projmake-project/is-buffer-part-of-project? (prj buffer)
   "Given a project and a buffer tests to see if the file belongs to
 the project"
   (if (buffer-file-name buffer)
-      (projmake-project--is-file-part-of-project prj (buffer-file-name buffer))
+      (projmake-project/is-file-part-of-project prj (buffer-file-name buffer))
     nil))
 
-(defmacro projmake-project--do-for-project-buffers (project &rest actions)
+(defmacro projmake-project/do-for-project-buffers (project &rest actions)
   `(dolist (buffer (buffer-list))
-     (when (projmake-project--is-buffer-part-of-project? ,project buffer)
+     (when (projmake-project/is-buffer-part-of-project? ,project buffer)
        (with-current-buffer buffer
          ,@actions))))
 

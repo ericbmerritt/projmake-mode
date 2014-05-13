@@ -57,7 +57,7 @@
   text)
 
 
-(defun projmake-parse-engine-split-output (residual new-output)
+(defun projmake-parse-engine/split-output (residual new-output)
   "Split OUTPUT into lines.
 Return last one as residual if it does not end with newline char.
 Returns ((LINES) RESIDUAL)."

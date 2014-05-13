@@ -19,6 +19,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Project definition and initialization
 (require 'cl-lib)
+(require 'projmake-parse-engine)
 
 (cl-defstruct projmake-build-state
   project
@@ -31,24 +32,24 @@
   error-info
   build-again?)
 
-(defun* projmake-build-state (project)
+(defun projmake-build-state/make (project)
   "Creates a project object for projmake-prj."
   (make-projmake-build-state
    :project project
    :warning-count 0
    :error-count 0))
 
-(defun projmake-project-has-warnings? (project)
+(defun projmake-build-state/has-warnings? (project)
   (> (projmake-build-state-warning-count project) 0))
 
-(defun projmake-project-has-errors? (project)
+(defun projmake-build-state/has-errors? (project)
   (> (projmake-build-state-error-count project) 0))
 
-(defun projmake-project-has-errors-or-warnings? (project)
-  (or (projmake-project-has-warnings? project)
-      (projmake-project-has-errors? project)))
+(defun projmake-build-state/has-errors-or-warnings? (project)
+  (or (projmake-build-state/has-warnings? project)
+      (projmake-build-state/has-errors? project)))
 
-(defun projmake-build-state-parse-output (build-state output)
+(defun projmake-build-state/parse-output (build-state output)
   "Helper function to call parse output on the current parse engine"
   (let* ((engine-state (projmake-build-state-parse-engine-state build-state))
          (parse-engine-parse-output
@@ -61,14 +62,14 @@
     (setf (projmake-build-state-parse-engine-state build-state) new-state)
     error-infos))
 
-(defun projmake-build-state-parse-engine (build-state)
+(defun projmake-build-state/parse-engine (build-state)
   (projmake-project-parse-engine (projmake-build-state-project build-state)))
 
-(defun projmake-build-state-parse-engine-stop (build-state)
+(defun projmake-build-state/parse-engine-stop (build-state)
   (let* ((engine-state (projmake-build-state-parse-engine-state build-state))
          (parse-engine-stop
           (projmake-parse-engine-stop
-           (projmake-build-state-parse-engine build-state)))
+           (projmake-build-state/parse-engine build-state)))
          (error-infos (funcall parse-engine-stop engine-state)))
     (setf (projmake-build-state-parse-engine-state build-state) nil)
     error-infos))

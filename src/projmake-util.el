@@ -1,4 +1,4 @@
-;; -*- coding: utf-8; lexical-binding: t -*-
+;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009
 ;;   Free Software Foundation, Inc.
 ;; Copyright (C) 2012 Eric Merritt
@@ -15,28 +15,7 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
-(with-no-warnings
-  (require 'cl))
-
-(defconst PROJMAKE-NONE -1)
-(defconst PROJMAKE-ERROR 0)
-(defconst PROJMAKE-WARNING 1)
-(defconst PROJMAKE-INFO 2)
-(defconst PROJMAKE-DEBUG 3)
-
-;; Defined in project root
-(defvar projmake-log-level)
-(defvar projmake-projects)
-
-(defun projmake-log (level text &rest args)
-  "Log a message at level LEVEL.
-If LEVEL is higher than `projmake-log-level', the message is
-ignored.  Otherwise, it is printed using `message'.
-TEXT is a format control string, and the remaining arguments ARGS
-are the string substitutions (see `format')."
-  (when (<= level projmake-log-level)
-    (let ((msg (apply 'format text args)))
-      (message "%s" msg))))
+(require 'cl-lib)
 
 (defun projmake-find-first (function items)
   "Return the first non-nil value that function returns"
@@ -49,14 +28,9 @@ are the string substitutions (see `format')."
 (defvar projmake-dir
   (file-name-directory load-file-name))
 
-(defmacro projmake-util--do-for-buffers (&rest actions)
+(defmacro projmake-util/do-for-buffers (&rest actions)
   `(dolist (buffer (buffer-list))
      (with-current-buffer buffer
        ,@actions)))
 
 (provide 'projmake-util)
-
-;; Local Variables:
-;; coding: utf-8
-;; lexical-binding: t
-;; End:

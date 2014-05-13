@@ -16,71 +16,71 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Overlay management
-(require 'projmake-util)
+(require 'projmake-log)
 (require 'projmake-project)
 (require 'projmake-parse-engine)
 
 (defvar compilation-error-regexp-alist-alist)
 
-(defun projmake-markup--project-overlays (project)
+(defun projmake-markup/project-overlays (project)
   (let ((overlays nil))
-    (projmake-project--do-for-project-buffers
+    (projmake-project/do-for-project-buffers
      project
      (let ((buffer-overlays (overlays-in (point-min) (point-max))))
        (while buffer-overlays
          (let ((overlay (car buffer-overlays)))
-           (when (projmake-markup--overlay-p overlay)
+           (when (projmake-markup/overlay-p overlay)
              (setq overlays (cons overlay overlays))))
          (setq buffer-overlays (cdr buffer-overlays)))))
 
     overlays))
 
-(defun projmake-markup--delete-overlays (project)
+(defun projmake-markup/delete-overlays (project)
   "Delete all overlays in the project"
-  (dolist (ol (projmake-markup--project-overlays project))
+  (dolist (ol (projmake-markup/project-overlays project))
     (when ol
       (delete-overlay ol))))
 
-(defun projmake-markup--highlight-err-lines (project error-infos)
+(defun projmake-markup/highlight-err-lines (project error-infos)
   "Highlight error lines in BUFFER using info from project-error-info"
   (save-excursion
     (dolist (err error-infos)
-      (projmake-markup--highlight-line project err))))
+      (projmake-markup/highlight-line project err))))
 
-(defun projmake-markup--relative-line (line-error)
+(defun projmake-markup/relative-line (line-error)
   "Find the line number line relative to the current line"
   (+ 1 (- (projmake-error-info-line line-error)
           (line-number-at-pos (point)))))
 
-(defun projmake-markup--beginning-char (relative-line line-error)
+(defun projmake-markup/beginning-char (relative-line line-error)
   (let ((line-beg (line-beginning-position relative-line))
         (start-char (projmake-error-info-char line-error)))
     (if (> start-char 0)
         (+ line-beg start-char)
       line-beg)))
 
-(defun projmake-markup--end-char (relative-line line-error)
+(defun projmake-markup/end-char (relative-line line-error)
   (let ((end-char (projmake-error-info-end-char line-error)))
     (if (> end-char 0)
         (+ end-char (line-beginning-position relative-line))
       (line-end-position relative-line))))
 
-(defun projmake-markup--highlight-line (project line-error)
+(defun projmake-markup/highlight-line (project line-error)
   "Highlight line LINE-NO in current buffer.
 Perhaps use text from line-error to enhance highlighting."
   (let* ((error-file (expand-file-name
                       (projmake-error-info-file line-error)
                       (projmake-project-dir project)))
          (buffer (get-file-buffer error-file)))
-    (projmake-log PROJMAKE-DEBUG "Looking for buffer for %s" error-file)
+    (projmake-log/debug "Looking for buffer for %s" error-file)
     (when buffer
-      (projmake-log PROJMAKE-DEBUG "Got buffer for %s" error-file)
+      (projmake-log/debug "Got buffer for %s" error-file)
       (with-current-buffer buffer
-        (let* ((relative-line (projmake-markup--relative-line line-error))
+        (let* ((relative-line (projmake-markup/relative-line line-error))
                (line-beg (line-beginning-position relative-line))
-               (highlight-beg (projmake-markup--beginning-char
+               (highlight-beg (projmake-markup/beginning-char
                                relative-line line-error))
-               (highlight-end (projmake-markup--end-char
+               (highlight-end (projmake-markup/end-char
                                relative-line line-error))
                (tooltip-text (projmake-error-info-text line-error))
                (face nil))
@@ -89,24 +89,24 @@ Perhaps use text from line-error to enhance highlighting."
               (setq face 'projmake-errline)
             (setq face 'projmake-warnline))
 
-          (projmake-markup--add-overlays line-beg
-                                         highlight-beg
-                                         highlight-end
-                                         tooltip-text
-                                         face
-                                         nil))))))
+          (projmake-markup/add-overlays line-beg
+                                        highlight-beg
+                                        highlight-end
+                                        tooltip-text
+                                        face
+                                        nil))))))
 
-(defun projmake-markup--util-attr (face str)
+(defun projmake-markup/util-attr (face str)
   "add some properties to a text string and return it"
   (put-text-property 0 (length str) 'face face str)
   str)
 
-(defun projmake-markup--overlay-p (ov)
+(defun projmake-markup/overlay-p (ov)
   "Determine whether overlay OV was created by projmake."
   (and (overlayp ov)
        (overlay-get ov 'projmake-overlay)))
 
-(defun projmake-markup--add-overlay (beg end tooltip-text face mouse-face)
+(defun projmake-markup/add-overlay (beg end tooltip-text face mouse-face)
   "Allocate a projmake overlay in range BEG and END."
   (let ((ov (make-overlay beg end nil t t)))
     (overlay-put ov 'face face)
@@ -117,35 +117,35 @@ Perhaps use text from line-error to enhance highlighting."
     (overlay-put ov 'evaporate t)
     (when tooltip-text
       (overlay-put ov 'before-string
-                   (projmake-markup--util-attr face
-                                               (concat tooltip-text ": \n"))))
-    (projmake-log PROJMAKE-DEBUG "created an overlay at (%d-%d)" beg end)))
+                   (projmake-markup/util-attr face
+                                              (concat tooltip-text ": \n"))))
+    (projmake-log/debug "created an overlay at (%d-%d)" beg end)))
 
-(defun projmake-markup--add-tool-tip-overlay (beg-of-line
-                                              tooltip-text
-                                              face
-                                              mouse-face)
+(defun projmake-markup/add-tool-tip-overlay (beg-of-line
+                                             tooltip-text
+                                             face
+                                             mouse-face)
   (let ((beg beg-of-line)
         (end (+ 1 beg-of-line)))
-    (projmake-markup--add-overlay beg end tooltip-text
-                                  face mouse-face)))
+    (projmake-markup/add-overlay beg end tooltip-text
+                                 face mouse-face)))
 
-(defun projmake-markup--add-highlight-overlay (beg
-                                               end
-                                               face
-                                               mouse-face)
-  (projmake-markup--add-overlay beg end nil
-                                face mouse-face))
+(defun projmake-markup/add-highlight-overlay (beg
+                                              end
+                                              face
+                                              mouse-face)
+  (projmake-markup/add-overlay beg end nil
+                               face mouse-face))
 
-(defun projmake-markup--add-overlays (beg-of-line
-                                      beg
-                                      end
-                                      tooltip-text
-                                      face
-                                      mouse-face)
+(defun projmake-markup/add-overlays (beg-of-line
+                                     beg
+                                     end
+                                     tooltip-text
+                                     face
+                                     mouse-face)
   "Allocate a projmake overlay in range BEG and END."
-  (projmake-markup--add-tool-tip-overlay
+  (projmake-markup/add-tool-tip-overlay
    beg-of-line tooltip-text face mouse-face)
-  (projmake-markup--add-highlight-overlay beg end face mouse-face))
+  (projmake-markup/add-highlight-overlay beg end face mouse-face))
 
 (provide 'projmake-markup)

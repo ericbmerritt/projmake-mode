@@ -17,10 +17,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Error parsing and handling
 (require 'cl-lib)
-(require 'projmake-util)
+(require 'projmake-log)
 (require 'projmake-parse-engine)
 
-(defvar projmake-error-start-parsing
+(defvar projmake-ocaml-parse-engine/start-parsing
   "^File\s\"\\(.+\\)\",\sline\s\\([0-9]+\\),\
 \scharacters\s\\([0-9]+-[0-9]+\\|[0-9+]\\):")
 
@@ -35,51 +35,54 @@
   (residual "")
   (text ""))
 
-(defun projmake-ocaml-parse-engine-make ()
+(defun projmake-ocaml-parse-engine/make ()
   "Build the struct for the default parse engine"
   (make-projmake-parse-engine
    :name "Ocaml parse engine"
-   :init  'projmake-ocaml-parse-engine-init
-   :parse-output 'projmake-ocaml-parse-engine-parse-output
-   :stop 'projmake-ocaml-parse-engine-stop))
+   :init  'projmake-ocaml-parse-engine/init
+   :parse-output 'projmake-ocaml-parse-engine/parse-output
+   :stop 'projmake-ocaml-parse-engine/stop))
 
-(defun projmake-ocaml-parse-engine-init ()
+(define-obsolete-function-alias 'projmake-ocaml-parse-engine-make
+  'projmake-ocaml-parse-engine/make)
+
+(defun projmake-ocaml-parse-engine/init ()
   "Initialize the engine state. nothing much to do here. Our state is always
 going to be the unparsed remainder."
   (make-projmake-ocaml-state))
 
-(defun projmake-ocaml-parse-engine-parse-output (state output)
+(defun projmake-ocaml-parse-engine/parse-output (state output)
   "Split OUTPUT into lines, merge in residual if necessary."
   (let* ((residual (projmake-ocaml-state-residual state))
-         (result (projmake-parse-engine-split-output residual output))
+         (result (projmake-parse-engine/split-output residual output))
          (lines (car result))
          (new-residual (cadr result)))
     (setf (projmake-ocaml-state-residual state) new-residual)
-    (let ((x (projmake-ocaml-parse-engine--parse-lines state lines)))
+    (let ((x (projmake-ocaml-parse-engine/parse-lines state lines)))
       (list state x))))
 
-(defun projmake-ocaml-parse-engine-stop (state)
+(defun projmake-ocaml-parse-engine/stop (state)
   "Parse residual if it's non empty."
   (let* ((residual (projmake-ocaml-state-residual state))
-         (lines (car (projmake-parse-engine-split-output residual ""))))
-    (projmake-ocaml-parse-engine--parse-lines state lines)))
+         (lines (car (projmake-parse-engine/split-output residual ""))))
+    (projmake-ocaml-parse-engine/parse-lines state lines)))
 
-(defun projmake-ocaml-parse-engine--parse-lines (state lines)
+(defun projmake-ocaml-parse-engine/parse-lines (state lines)
   "Parse error lines"
   (let ((acc '()))
     (while lines
       (let* ((line (car lines))
              (line-err-info
-              (projmake-ocaml-parse-engine--parse-line state line)))
+              (projmake-ocaml-parse-engine/parse-line state line)))
         (setq lines (cdr lines))
-        (projmake-log PROJMAKE-DEBUG "parsed '%s', %s line-err-info"
-                      line (if line-err-info "got" "no"))
+        (projmake-log/debug "parsed '%s', %s line-err-info"
+                            line (if line-err-info "got" "no"))
         (when line-err-info
           (push line-err-info acc))))
     acc))
 
-(defun projmake-ocaml-parse-engine--initial-line (state line)
-  (if (string-match projmake-error-start-parsing line)
+(defun projmake-ocaml-parse-engine/initial-line (state line)
+  (if (string-match projmake-ocaml-parse-engine/start-parsing line)
       (let* ((file (match-string 1 line))
              (line-number (match-string 2 line))
              (raw-char (match-string 3 line))
@@ -101,7 +104,7 @@ going to be the unparsed remainder."
         nil)
     nil))
 
-(defun projmake-ocaml-parse-engine--body (state line)
+(defun projmake-ocaml-parse-engine/body (state line)
   (if (string-match "^[[:blank:]]+" line)
       (progn
         (setf (projmake-ocaml-state-text state)
@@ -123,7 +126,7 @@ going to be the unparsed remainder."
       (setf (projmake-ocaml-state-text state) "")
       err)))
 
-(defun projmake-ocaml-parse-engine--body-start (state line)
+(defun projmake-ocaml-parse-engine/body-start (state line)
   (if (or (string-match "^\\(Error\\):\\(.+\\)" line)
           (string-match "^\\(Warning\\):\\(.+\\)" line))
       (let ((type (if (string= (match-string 1 line) "Error")
@@ -136,19 +139,17 @@ going to be the unparsed remainder."
         nil)
     nil))
 
-(defun projmake-ocaml-parse-engine--parse-line (state line)
+(defun projmake-ocaml-parse-engine/parse-line (state line)
   "Parse LINE to see if it is an error or warning.
 Return its components if so, nil otherwise."
   (let* ((parse-state (projmake-ocaml-state-current-state state))
          (r (cond
              ((eql 'initial parse-state)
-              (projmake-ocaml-parse-engine--initial-line state line))
+              (projmake-ocaml-parse-engine/initial-line state line))
              ((eql 'body-start parse-state)
-              (projmake-ocaml-parse-engine--body-start state line))
+              (projmake-ocaml-parse-engine/body-start state line))
              ((eql 'body parse-state)
-              (projmake-ocaml-parse-engine--body state line)))) )
-    r
-    ))
-
+              (projmake-ocaml-parse-engine/body state line)))) )
+    r))
 
 (provide 'projmake-ocaml-parse-engine)
