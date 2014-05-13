@@ -208,11 +208,14 @@ processes where the key is the project file and the value is the
 process itself.")
 
 (defun projmake-make-process-name (project)
-  (concat "projmake-build["
+  (concat "Build Output ["
           (projmake-project-name project) ":"
           (number-to-string
            (projmake-project-build-counter project))
           "]"))
+
+(defun projmake-build-buffer (project)
+  (process-buffer (projmake-project-process project)))
 
 (defun projmake-interrupt-existing-and-start-build (project)
   "If a build process is running interrupt it and start a new
@@ -305,19 +308,16 @@ It's flymake process filter."
           (projmake-markup--highlight-err-lines
            (projmake-build-state-project build-state)
            error-infos)))
-      (projmake-populate-process-buffer build-state output))))
+      (projmake-populate-process-buffer source-buffer  output))))
 
-(defun projmake-populate-process-buffer (build-state string)
-  (let ((output-buffer (get-buffer-create
-                        (projmake-build-buffer-name
-                         (projmake-build-state-project build-state)))))
-    (with-current-buffer output-buffer
+(defun projmake-populate-process-buffer (output-buffer string)
+  (with-current-buffer output-buffer
       (save-excursion
         (setf buffer-read-only nil)
         ;; Insert the text, advancing the process marker.
         (goto-char (point-max))
         (insert string)
-        (setf buffer-read-only t)))))
+        (setf buffer-read-only t))))
 
 (defun projmake-process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
@@ -355,7 +355,13 @@ It's flymake process filter."
 (defun projmake-clear-project-output (project)
   (projmake-banner-clear project)
   (projmake-markup--delete-overlays project)
-  (projmake-erase-build-buffer project))
+  (projmake-util--do-for-buffers
+   (let ((name (buffer-name (current-buffer))))
+   (when (string-match "Build Output \\[\\w+:\\([0-9]+\\)\\]"
+                       name)
+     (let ((build (string-to-number (match-string 1 name))))
+       (when (< build (projmake-project-build-counter project))
+         (kill-buffer (current-buffer))))))))
 
 (defun projmake-post-build (build-state exitcode)
   (setf (projmake-project-last-exitcode
@@ -373,6 +379,6 @@ It's flymake process filter."
                 (projmake-build-state-warning-count build-state)))
 
 (defun projmake-erase-build-buffer (project)
-  (kill-buffer (projmake-process-buffer project))
+  (kill-buffer (projmake-build-buffer project)))
 
 (provide 'projmake-mode)

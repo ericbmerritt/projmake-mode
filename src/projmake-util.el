@@ -49,6 +49,11 @@ are the string substitutions (see `format')."
 (defvar projmake-dir
   (file-name-directory load-file-name))
 
+(defmacro projmake-util--do-for-buffers (&rest actions)
+  `(dolist (buffer (buffer-list))
+     (with-current-buffer buffer
+       ,@actions)))
+
 (provide 'projmake-util)
 
 ;; Local Variables:
