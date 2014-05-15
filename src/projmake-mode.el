@@ -315,7 +315,11 @@ It's flymake process filter."
       ;; Insert the text, advancing the process marker.
       (goto-char (point-max))
       (insert string)
-      (setf buffer-read-only t))))
+      (setf buffer-read-only t)))
+  (let ((window-buffer (get-buffer-window output-buffer)))
+    (when window-buffer
+      (with-selected-window window-buffer)
+      (goto-char (point-max)))))
 
 (defun projmake-mode/process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
@@ -358,7 +362,6 @@ It's flymake process filter."
                            name)
          (let ((proj-name (match-string 1 name))
                (build (string-to-number (match-string 2 name))))
-           (message "--->%s" proj-name)
            (when (and (string= project-name proj-name)
                       (< build (projmake-project-build-counter project)))
              (kill-buffer (current-buffer)))))))))
