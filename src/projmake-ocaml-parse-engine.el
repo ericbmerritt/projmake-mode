@@ -108,9 +108,9 @@ going to be the unparsed remainder."
   (if (string-match "^[[:blank:]]+" line)
       (progn
         (setf (projmake-ocaml-state-text state)
-              (concat (projmake-ocaml-state-text state) line))
+              (concat (projmake-ocaml-state-text state) line "\n"))
         nil)
-    (let ((err (make-projmake-error-info
+    (let ((err (make-projmake-error
                 :file (projmake-ocaml-state-file state)
                 :line (projmake-ocaml-state-line state)
                 :type (projmake-ocaml-state-type state)
@@ -134,7 +134,7 @@ going to be the unparsed remainder."
                     "w"))
             (text (match-string 2 line)))
         (setf (projmake-ocaml-state-type state) type)
-        (setf (projmake-ocaml-state-text state) text)
+        (setf (projmake-ocaml-state-text state) (concat "\n     " text "\n"))
         (setf (projmake-ocaml-state-current-state state) 'body)
         nil)
     nil))

@@ -17,6 +17,7 @@
 ;; Provides a banner used to display information about the build process
 (require 'projmake-util)
 (require 'projmake-project)
+(require 'projmake-error)
 (require 'projmake-build-state)
 
 (defun projmake-banner/building (project)
@@ -78,7 +79,7 @@
   (let* ((error-info-list (projmake-build-state-error-info build-state))
          (err-count 0))
     (dolist (err error-info-list)
-      (when (string-equal type (projmake-error-info-type err))
+      (when (string-equal type (projmake-error-type err))
         (setq err-count (+ err-count 1))))
     err-count))
 

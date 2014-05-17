@@ -20,6 +20,7 @@
 (require 'projmake-log)
 (require 'projmake-project)
 (require 'projmake-build-state)
+(require 'projmake-elmm)
 (require 'projmake-markup)
 (require 'projmake-discover)
 (require 'projmake-banner)
@@ -303,7 +304,8 @@ It's flymake process filter."
                 (append project-errors error-infos))
           (projmake-markup/highlight-err-lines
            (projmake-build-state-project build-state)
-           error-infos)))
+           error-infos)
+          (projmake-elmm/set-build-state build-state)))
       (projmake-mode/populate-process-buffer source-buffer  output))))
 
 (defun projmake-mode/populate-process-buffer (output-buffer string)
@@ -349,13 +351,17 @@ It's flymake process filter."
 (defun projmake-mode/clear-project-output (project)
   (projmake-banner/clear project)
   (projmake-markup/delete-overlays project)
-  (projmake-util/do-for-buffers
-   (let ((name (buffer-name (current-buffer))))
-     (when (string-match "Build Output \\[\\w+:\\([0-9]+\\)\\]"
-                         name)
-       (let ((build (string-to-number (match-string 1 name))))
-         (when (< build (projmake-project-build-counter project))
-           (kill-buffer (current-buffer))))))))
+  (let ((project-name (projmake-project-name project)))
+    (projmake-util/do-for-buffers
+     (let ((name (buffer-name (current-buffer))))
+       (when (string-match "Build Output \\[\\([^:]+\\):\\([0-9]+\\)\\]"
+                           name)
+         (let ((proj-name (match-string 1 name))
+               (build (string-to-number (match-string 2 name))))
+           (message "--->%s" proj-name)
+           (when (and (string= project-name proj-name)
+                      (< build (projmake-project-build-counter project)))
+             (kill-buffer (current-buffer)))))))))
 
 (defun projmake-mode/post-build (build-state exitcode)
   (setf (projmake-project-last-exitcode
@@ -365,8 +371,9 @@ It's flymake process filter."
   (projmake-log/error "exit code %d" exitcode)
   (projmake-banner/show build-state)
   (when (= 0 exitcode)
-    (projmake-mode/erase-build-buffer
-     (projmake-build-state-project build-state)))
+    (let ((project (projmake-build-state-project build-state)))
+      (projmake-elmm/remove-project-list-buffer project)
+      (projmake-mode/erase-build-buffer project)))
 
   (projmake-log/info "%s: %d error(s), %d warning(s)"
                      (buffer-name)
@@ -374,6 +381,13 @@ It's flymake process filter."
                      (projmake-build-state-warning-count build-state)))
 
 (defun projmake-mode/erase-build-buffer (project)
-  (kill-buffer (projmake-mode/build-buffer project)))
+  (let ((project-name (projmake-project-name project)))
+    (projmake-util/do-for-buffers
+     (let ((name (buffer-name (current-buffer))))
+       (when (string-match "Build Output \\[\\([^:]+\\):\\([0-9]+\\)\\]"
+                           name)
+         (let ((proj-name (match-string 1 name)))
+           (when (string= project-name proj-name)
+             (kill-buffer (current-buffer)))))))))
 
 (provide 'projmake-mode)

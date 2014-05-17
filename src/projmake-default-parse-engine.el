@@ -18,6 +18,7 @@
 ;; Error parsing and handling
 (require 'compile)
 (require 'projmake-log)
+(require 'projmake-error)
 (require 'projmake-parse-engine)
 
 (defun projmake-default-parse-engine/make ()
@@ -25,7 +26,7 @@
   (make-projmake-parse-engine
    :name "Default single line parse engine"
    :init  'projmake-default-parse-engine/init
-   :parse-output 'projmake-default-parse-engine-parse/output
+   :parse-output 'projmake-default-parse-engine/parse-output
    :stop 'projmake-default-parse-engine/stop))
 
 (defun projmake-default-parse-engine/init ()
@@ -159,10 +160,10 @@ error-info struct if successful and nil if not"
                     "line=%s text=%s")
            file-idx line-idx
            raw-file-name line-no err-text)
-          (make-projmake-error-info :file raw-file-name
-                                    :line line-no
-                                    :type err-type
-                                    :text err-text))
+          (make-projmake-error :file raw-file-name
+                               :line line-no
+                               :type err-type
+                               :text err-text))
       nil)))
 
 (defun projmake-default-parse-engine/parse-line (line)

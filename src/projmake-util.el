@@ -28,9 +28,21 @@
 (defvar projmake-dir
   (file-name-directory load-file-name))
 
+(defun projmake-util/buffer-for-error (line-error project)
+  (let ((error-file (expand-file-name
+                     (projmake-error-file line-error)
+                     (projmake-project-dir project))))
+    (projmake-log/debug "Looking for buffer for %s" error-file)
+    (let ((buffer (get-file-buffer error-file)))
+      (if buffer
+          buffer
+        (find-file-noselect error-file)))))
+
 (defmacro projmake-util/do-for-buffers (&rest actions)
   `(dolist (buffer (buffer-list))
      (with-current-buffer buffer
        ,@actions)))
+
+
 
 (provide 'projmake-util)
