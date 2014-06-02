@@ -30,7 +30,7 @@
 (defun projmake-error/get-face-for-error (error)
   (if (string= (projmake-error-type error) "e")
       'projmake-errline
-    'projmake-projmake-warnline))
+    'projmake-warnline))
 
 (defun projmake-error/expand-type (error)
   (if (string= (projmake-error-type error) "e")
