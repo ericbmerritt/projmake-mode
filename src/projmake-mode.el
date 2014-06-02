@@ -89,14 +89,10 @@ automatically search for the project root and build system style"
   :type '(alist :value-type (string string string)))
 
 ;;;###autoload
-(defcustom projmake-switch-to-buffer-with-error t
-  "Some build systems stop building at the first file that errors. So
-it could be that even if there are errors in the project the user
-doesn't know it because the buffer that is active has no errors. If
-`projmake-switch-to-buffer-with-error' is t then the system checks to
-see if there are errors in the current buffer, if so nothing happens,
-but if there are no errors then the first buffer with errors is made
-active."
+(defcustom projmake-show-build-output-buffer t
+  "Usually its nice to see the build output buffer, but sometimes it gets
+annoying. This lets you disable displaying that buffer (though it still exists)
+if you don't want to see it.."
   :group 'projmake
   :type 'boolean)
 
@@ -306,17 +302,19 @@ It's flymake process filter."
       (projmake-mode/populate-process-buffer source-buffer  output))))
 
 (defun projmake-mode/populate-process-buffer (output-buffer string)
+  (when projmake-show-build-output-buffer
+    (display-buffer output-buffer))
   (with-current-buffer output-buffer
     (save-excursion
       (setf buffer-read-only nil)
       ;; Insert the text, advancing the process marker.
       (goto-char (point-max))
       (insert string)
-      (setf buffer-read-only t)))
-  (let ((window-buffer (get-buffer-window output-buffer)))
-    (when window-buffer
-      (with-selected-window window-buffer)
-      (goto-char (point-max)))))
+      (setf buffer-read-only t))
+    (let ((window-buffer (get-buffer-window output-buffer)))
+      (when window-buffer
+        (with-selected-window window-buffer)
+        (goto-char (point-max))))))
 
 (defun projmake-mode/process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
