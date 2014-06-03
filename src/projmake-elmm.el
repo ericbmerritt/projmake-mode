@@ -34,45 +34,33 @@
   (setq tabulated-list-entries #'projmake-elmm/error-list-entries)
   (tabulated-list-init-header))
 
-(defun projmake-elmm/get-project-list-buffer-name (project)
+(defun projmake-elmm/get-project-list-buffer-name (build-state)
   "Get the buffer name for the project"
-  (concat "Projmake Error List ["
-          (projmake-project-name project)
-          "]"))
+  (let ((project (projmake-elmm/get-project build-state)))
+    (concat "Projmake Error List ["
+            (projmake-project-name project)
+            "]")))
 
-(defvar-local projmake-elmm/source-project nil
-  "The current source project of the error list.")
-(put 'projmake-elmm/source-project 'permanent-local t)
-
-(defun projmake-elmm/get-project-list-buffer (project)
+(defun projmake-elmm/get-project-list-buffer (build-state)
   "Get the list buffer for the project. There is only ever one"
   (let ((buffer (get-buffer-create
-                 (projmake-elmm/get-project-list-buffer-name project))))
-    (message " got buffer %s" buffer)
+                  (projmake-elmm/get-project-list-buffer-name build-state))))
     (with-current-buffer buffer
-      (setf projmake-elmm/source-project project)
       (projmake-elmm/error-list-mode))
     (pop-to-buffer buffer)
     buffer))
 
-(defun projmake-elmm/remove-project-list-buffer (project)
-  (let ((buffer (projmake-elmm/get-project-list-buffer project)))
+(defun projmake-elmm/get-project (build-state)
+  (projmake-build-state-project build-state))
+
+(defun projmake-elmm/remove-project-list-buffer (build-state)
+  (let* ((project (projmake-elmm/get-project build-state))
+         (buffer (projmake-elmm/get-project-list-buffer project)))
     (kill-buffer buffer)))
 
 (defvar-local projmake-elmm/source-build-state nil
   "The currently displaying build state")
 (put 'projmake-elmm/source-build-state 'permanent-local t)
-
-(defun projmake-elmm/set-project (project)
-  "Set BUFFER as the source buffer of the error list."
-  (with-current-buffer (projmake-elmm/get-project-list-buffer (project))
-    (setf projmake-elmm/source-project project)))
-
-(defun projmake-elmm/set-build-state (build-state)
-  (with-current-buffer (projmake-elmm/get-project-list-buffer
-                        (projmake-build-state-project build-state))
-    (setf projmake-elmm/source-build-state build-state)
-    (projmake-elmm/refresh)))
 
 (defun projmake-elmm/error-list-make-number-cell (number face)
   "Make a table cell for a NUMBER with FACE.
@@ -87,6 +75,7 @@ string with attached text properties."
   "Make a table cell for the given ERROR.
 
 Return a list with the contents of the table cell."
+
   (let ((file (projmake-error-file error))
         (line (projmake-error-line error))
         (column (projmake-error-char error))
@@ -112,7 +101,8 @@ Return a list with the contents of the table cell."
   "Go to the source of the error associated to BUTTON."
   (let* ((error (button-get button 'projmake-error))
          (buffer (projmake-util/buffer-for-error error
-                                                 projmake-elmm/source-project)))
+                                                 (projmake-elmm/get-project
+                                                  projmake-elmm/source-build-state))))
     (display-buffer buffer)
     (pop-to-buffer buffer)
     (let ((line (projmake-error-line error))
@@ -127,19 +117,18 @@ Return a list with the contents of the table cell."
   "Keymap for error list mode line.")
 
 
-(defun projmake-elmm/refresh ()
+(defun projmake-elmm/refresh (build-state)
   "Refresh the current error list.
 
 Add all errors currently reported for the current
 `flycheck-error-list-source-buffer', and recenter the error
 list."
-  (interactive)
   ;; We only refresh the error list, when it is visible in a window, and we
   ;; select this window while reverting, because Tabulated List mode attempts to
   ;; recenter the error at the old location, so it must have the proper window
   ;; selected.
-  (let ((buffer (projmake-elmm/get-project-list-buffer-name
-                 projmake-elmm/source-project)))
+  (with-current-buffer (projmake-elmm/get-project-list-buffer build-state)
+    (setf projmake-elmm/source-build-state build-state)
     (revert-buffer)))
 
 (provide 'projmake-elmm)

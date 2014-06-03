@@ -21,8 +21,8 @@
 (require 'projmake-parse-engine)
 
 (defvar projmake-ocaml-parse-engine/start-parsing
-  "^File\s\"\\(.+\\)\",\sline\s\\([0-9]+\\),\
-\scharacters\s\\([0-9]+-[0-9]+\\|[0-9+]\\):")
+  "^File\s\"\\(.+\\)\",\sline\s\\([0-9]+\\)\\(,\
+\scharacters\s\\([0-9]+-[0-9]+\\|[0-9+]\\)\\)?:")
 
 (cl-defstruct projmake-ocaml-state
   (current-state 'initial)
@@ -64,8 +64,13 @@ going to be the unparsed remainder."
 (defun projmake-ocaml-parse-engine/stop (state)
   "Parse residual if it's non empty."
   (let* ((residual (projmake-ocaml-state-residual state))
-         (lines (car (projmake-parse-engine/split-output residual ""))))
-    (projmake-ocaml-parse-engine/parse-lines state lines)))
+         (lines (car (projmake-parse-engine/split-output residual "")))
+         (errs (projmake-ocaml-parse-engine/parse-lines state lines))
+         (err (projmake-ocaml-parse-engine/create-error state ""))
+         (result (if err
+                     (cons err errs)
+                   errs)))
+    result))
 
 (defun projmake-ocaml-parse-engine/parse-lines (state lines)
   "Parse error lines"
@@ -75,8 +80,8 @@ going to be the unparsed remainder."
              (line-err-info
               (projmake-ocaml-parse-engine/parse-line state line)))
         (setq lines (cdr lines))
-        (projmake-log/debug "parsed '%s', %s line-err-info"
-                            line (if line-err-info "got" "no"))
+        (projmake-log/debug "parsed '%s' at state %s" line
+                            (projmake-ocaml-state-current-state state))
         (when line-err-info
           (push line-err-info acc))))
     acc))
@@ -85,7 +90,9 @@ going to be the unparsed remainder."
   (if (string-match projmake-ocaml-parse-engine/start-parsing line)
       (let* ((file (match-string 1 line))
              (line-number (match-string 2 line))
-             (raw-char (match-string 3 line))
+             (raw-char (if (match-string 4 line)
+                           (match-string 4 line)
+                         "0"))
              (start-char "0")
              (end-char "0"))
         (if (string-match "^\\([0-9]+\\)-\\([0-9]+\\)$" raw-char)
@@ -104,12 +111,10 @@ going to be the unparsed remainder."
         nil)
     nil))
 
-(defun projmake-ocaml-parse-engine/body (state line)
-  (if (string-match "^[[:blank:]]+" line)
-      (progn
-        (setf (projmake-ocaml-state-text state)
-              (concat (projmake-ocaml-state-text state) line "\n"))
-        nil)
+(defun projmake-ocaml-parse-engine/create-error (state line)
+
+  (if (or (eql 'body-warning (projmake-ocaml-state-current-state state))
+          (eql 'body-error (projmake-ocaml-state-current-state state)))
     (let ((err (make-projmake-error
                 :file (projmake-ocaml-state-file state)
                 :line (projmake-ocaml-state-line state)
@@ -124,7 +129,35 @@ going to be the unparsed remainder."
       (setf (projmake-ocaml-state-start-char state) nil)
       (setf (projmake-ocaml-state-end-char state) nil)
       (setf (projmake-ocaml-state-text state) "")
-      err)))
+      ;; There is a good chance that this is an initial line so we should try
+      ;; parsing it
+      (projmake-ocaml-parse-engine/initial-line state line)
+      err)
+  nil))
+
+(defun projmake-ocaml-parse-engine/append-error-body (state line)
+  (setf (projmake-ocaml-state-text state)
+        (concat (projmake-ocaml-state-text state) line "\n"))
+  nil)
+
+(defun projmake-ocaml-parse-engine/body-warning (state line)
+  (if (not (string-match projmake-ocaml-parse-engine/start-parsing line))
+      (projmake-ocaml-parse-engine/append-error-body state line)
+    (projmake-ocaml-parse-engine/create-error state line)))
+
+(defun projmake-ocaml-parse-engine/body-error (state line)
+  (if (string-match "^[[:blank:]]+" line)
+      (projmake-ocaml-parse-engine/append-error-body state line)
+      (projmake-ocaml-parse-engine/create-error state line)))
+
+(defun projmake-ocaml-parse-engine/update-error-info (state type text)
+  (setf (projmake-ocaml-state-type state) type)
+  (setf (projmake-ocaml-state-text state) (concat "\n     " text "\n"))
+  (setf (projmake-ocaml-state-current-state state)
+        (if (string= type "e")
+            'body-error
+          'body-warning))
+  nil)
 
 (defun projmake-ocaml-parse-engine/body-start (state line)
   (if (or (string-match "^\\(Error\\):\\(.+\\)" line)
@@ -133,11 +166,8 @@ going to be the unparsed remainder."
                       "e"
                     "w"))
             (text (match-string 2 line)))
-        (setf (projmake-ocaml-state-type state) type)
-        (setf (projmake-ocaml-state-text state) (concat "\n     " text "\n"))
-        (setf (projmake-ocaml-state-current-state state) 'body)
-        nil)
-    nil))
+        (projmake-ocaml-parse-engine/update-error-info state type text))
+    (projmake-ocaml-parse-engine/update-error-info state "w" line)))
 
 (defun projmake-ocaml-parse-engine/parse-line (state line)
   "Parse LINE to see if it is an error or warning.
@@ -148,8 +178,10 @@ Return its components if so, nil otherwise."
               (projmake-ocaml-parse-engine/initial-line state line))
              ((eql 'body-start parse-state)
               (projmake-ocaml-parse-engine/body-start state line))
-             ((eql 'body parse-state)
-              (projmake-ocaml-parse-engine/body state line)))) )
+             ((eql 'body-warning parse-state)
+              (projmake-ocaml-parse-engine/body-warning state line))
+             ((eql 'body-error parse-state)
+              (projmake-ocaml-parse-engine/body-error state line)))) )
     r))
 
 (provide 'projmake-ocaml-parse-engine)

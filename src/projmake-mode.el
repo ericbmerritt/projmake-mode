@@ -249,6 +249,7 @@ build."
                                build-state proc event)))
          (parse-state (projmake-project/parse-engine-init project)))
     (setf (projmake-build-state-parse-engine-state build-state) parse-state)
+    (projmake-elmm/refresh build-state)
     (condition-case-unless-debug err
         (progn
           ;; Clean up the project markup up since we are building
@@ -296,16 +297,12 @@ It's flymake process filter."
                         (process-id process))
 
     (when (buffer-live-p source-buffer)
-      (let ((error-infos
-             (projmake-build-state/parse-output build-state output))
-            (project-errors (projmake-build-state-error-info build-state)))
-        (when error-infos
-          (setf (projmake-build-state-error-info build-state)
-                (append project-errors error-infos))
+      (let ((these-errors (projmake-build-state/parse-output build-state output)))
+        (when these-errors
           (projmake-markup/highlight-err-lines
            (projmake-build-state-project build-state)
-           error-infos)
-          (projmake-elmm/set-build-state build-state)))
+           these-errors)
+          (projmake-elmm/refresh build-state)))
       (projmake-mode/populate-process-buffer source-buffer  output))))
 
 (defun projmake-mode/populate-process-buffer (output-buffer string)
@@ -344,7 +341,8 @@ It's flymake process filter."
                    (projmake-build-state-project build-state)) nil)
             (projmake-markup/highlight-err-lines
              (projmake-build-state-project build-state)
-             (projmake-build-state/parse-engine-stop build-state)))
+             (projmake-build-state/parse-engine-stop build-state))
+            (projmake-elmm/refresh build-state))
         (error
          (let ((err-str
                 (format "Error in process sentinel for buffer %s: %s"

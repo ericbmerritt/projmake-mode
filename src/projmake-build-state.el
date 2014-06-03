@@ -49,6 +49,12 @@
   (or (projmake-build-state/has-warnings? project)
       (projmake-build-state/has-errors? project)))
 
+(defun projmake-build-state/append-errors (build-state error-infos)
+  (let ((old-error-infos (projmake-build-state-error-info build-state)))
+    (when error-infos
+      (setf (projmake-build-state-error-info build-state)
+            (append old-error-infos error-infos)))))
+
 (defun projmake-build-state/parse-output (build-state output)
   "Helper function to call parse output on the current parse engine"
   (let* ((engine-state (projmake-build-state-parse-engine-state build-state))
@@ -59,6 +65,7 @@
          (result (funcall parse-engine-parse-output engine-state output))
          (new-state (car result))
          (error-infos (cadr result)))
+    (projmake-build-state/append-errors build-state error-infos)
     (setf (projmake-build-state-parse-engine-state build-state) new-state)
     error-infos))
 
@@ -70,7 +77,9 @@
          (parse-engine-stop
           (projmake-parse-engine-stop
            (projmake-build-state/parse-engine build-state)))
-         (error-infos (funcall parse-engine-stop engine-state)))
+         (error-infos (funcall parse-engine-stop engine-state))
+         (old-error-infos (projmake-build-state-error-info build-state)))
+    (projmake-build-state/append-errors build-state error-infos)
     (setf (projmake-build-state-parse-engine-state build-state) nil)
     error-infos))
 
