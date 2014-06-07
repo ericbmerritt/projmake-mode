@@ -89,7 +89,7 @@ automatically search for the project root and build system style"
   :type '(alist :value-type (string string string)))
 
 ;;;###autoload
-(defcustom projmake-show-build-output-buffer t
+(defcustom projmake-show-build-output-buffer nil
   "Usually its nice to see the build output buffer, but sometimes it gets
 annoying. This lets you disable displaying that buffer (though it still exists)
 if you don't want to see it.."
