@@ -47,7 +47,8 @@
                   (projmake-elmm/get-project-list-buffer-name build-state))))
     (with-current-buffer buffer
       (projmake-elmm/error-list-mode))
-    (pop-to-buffer buffer)
+    (when projmake-show-error-list-buffer
+      (display-buffer buffer))
     buffer))
 
 (defun projmake-elmm/get-project (build-state)

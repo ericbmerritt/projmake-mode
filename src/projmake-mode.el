@@ -90,7 +90,14 @@ automatically search for the project root and build system style"
 
 ;;;###autoload
 (defcustom projmake-show-build-output-buffer nil
-  "Usually its nice to see the build output buffer, but sometimes it gets
+  "Usually you don't need to see the build output buffer, but sometimes you need
+to . This lets you control displaying that buffer (though it still exists)"
+  :group 'projmake
+  :type 'boolean)
+
+;;;###autoload
+(defcustom projmake-show-error-list-buffer t
+  "Usually its nice to see the error-list buffer, but sometimes it gets
 annoying. This lets you disable displaying that buffer (though it still exists)
 if you don't want to see it.."
   :group 'projmake
