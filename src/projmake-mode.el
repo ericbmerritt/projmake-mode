@@ -17,9 +17,12 @@
 (require 'cl-lib)
 
 (require 'projmake-util)
+(require 'projmake-log)
 (require 'projmake-project)
+(require 'projmake-build-state)
+(require 'projmake-elmm)
 (require 'projmake-markup)
-(require 'projmake-extras)
+(require 'projmake-discover)
 (require 'projmake-banner)
 (require 'projmake-parse-engine)
 (require 'projmake-ocaml-parse-engine)
@@ -68,17 +71,7 @@ of each project"
   :type 'string)
 
 ;;;###autoload
-(defcustom projmake-build-now! t
-  "Indicates whether the current build (if one exists) is killed and
-  restarted when ever a relevant build event occurs. If t, the current
-  running build is killed and a new build started. If nil, a marker is
-  set on the project such that when the build terminates naturally a
-  new build is started immediately"
-  :group 'projmake
-  :type 'boolean)
-
-;;;###autoload
-(defcustom projmake-log-level -1
+(defcustom projmake-log/level -1
   "Logging level, only messages with level lower or equal will be
 logged. -1 = NONE, 0 = ERROR, 1 = WARNING, 2 = INFO, 3 = DEBUG"
   :group 'projmake
@@ -88,7 +81,7 @@ logged. -1 = NONE, 0 = ERROR, 1 = WARNING, 2 = INFO, 3 = DEBUG"
 (defcustom projmake-project-descs
   '(("Make" "Makefile" "nice -n5 make")
     ("Ocaml" "myocamlbuild.ml" "nice -n5 ocaml setup.ml -build"
-     (projmake-ocaml-parse-engine-make))
+     (projmake-ocaml-parse-engine/make))
     ("Rebar" "rebar.config" "nice -n5 rebar skip_deps=true compile"))
   "These are the default names + dominating files + commands needed to
 automatically search for the project root and build system style"
@@ -96,14 +89,17 @@ automatically search for the project root and build system style"
   :type '(alist :value-type (string string string)))
 
 ;;;###autoload
-(defcustom projmake-switch-to-buffer-with-error t
-  "Some build systems stop building at the first file that errors. So
-it could be that even if there are errors in the project the user
-doesn't know it because the buffer that is active has no errors. If
-`projmake-switch-to-buffer-with-error' is t then the system checks to
-see if there are errors in the current buffer, if so nothing happens,
-but if there are no errors then the first buffer with errors is made
-active."
+(defcustom projmake-show-build-output-buffer nil
+  "Usually you don't need to see the build output buffer, but sometimes you need
+to . This lets you control displaying that buffer (though it still exists)"
+  :group 'projmake
+  :type 'boolean)
+
+;;;###autoload
+(defcustom projmake-show-error-list-buffer t
+  "Usually its nice to see the error-list buffer, but sometimes it gets
+annoying. This lets you disable displaying that buffer (though it still exists)
+if you don't want to see it.."
   :group 'projmake
   :type 'boolean)
 
@@ -112,7 +108,7 @@ active."
 ;;;###autoload
 
 ;; buffer local variable defined in minor mode declaration
-(defvar projmake-toggled)
+(defvar projmake-mode/toggled)
 
 (define-minor-mode projmake-mode
   "Toggle projmake-mode
@@ -124,284 +120,280 @@ active."
   ;; The indicator for the mode line.
   " Projmake"
   ;; The minor mode bindings.
-  '(([C-backspace] . projmake-toggle))
+  '(([C-backspace] . projmake-mode/toggle))
   :group 'projmake
-  (make-local-variable 'projmake-toggled)
-  (projmake-on))
+  (make-local-variable 'projmake-mode/toggled)
+  (projmake-mode/on))
 
 ;;;###autoload
-(defun projmake-toggle ()
+(defun projmake-mode/toggle ()
   "Togle projmake on or off depending on what projmake-toggle is set
 to"
   (interactive)
-  (if projmake-toggled
-      (projmake-off)
-    (projmake-on)))
+  (if projmake-mode/toggled
+      (projmake-mode/off)
+    (projmake-mode/on)))
 
 ;;;###autoload
-(defun projmake-on ()
+(defun projmake-mode/on ()
   "Turn projmake building on for a buffer"
   (interactive)
-  (setq projmake-toggled t)
-  (projmake-buildable-event)
-  (add-hook 'after-save-hook 'projmake-buildable-event
+  (setq projmake-mode/toggled t)
+  (projmake-mode/buildable-event)
+  (add-hook 'after-save-hook 'projmake-mode/buildable-event
             t 'local)) ;Only in the current buffer
 
 ;;;###autoload
-(defun projmake-off ()
+(defun projmake-mode/off ()
   "Turn projmake off "
   (interactive)
-  (let ((project (projmake-find-project-by-buffer (current-buffer))))
-    (projmake-clear-project-output project))
-
-  (setq projmake-toggled nil)
-  (remove-hook 'after-save-hook 'projmake-buildable-event
+  (projmake-mode/toggle-off)
+  (remove-hook 'after-save-hook 'projmake-mode/buildable-event
                'local)) ;Only in the current buffer
 
-(add-hook 'projmake-mode-hook 'projmake-buildable-event)
+(add-hook 'projmake-mode-hook 'projmake-mode/buildable-event)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Project Management
-(defvar projmake-projects nil
+(defvar projmake-mode/projects nil
   "This is where all the active projects currently loaded are
 stored")
 
-(defun projmake-clear-projects ()
+(defun projmake-mode/toggle-off ()
+  "Cleanup building and toggle it off"
+  (let ((project (projmake-project/find-by-buffer projmake-mode/projects
+                                                  (current-buffer))))
+    (projmake-mode/clear-project-output project))
+  (setq projmake-mode/toggled nil))
+
+(defun projmake-mode/clear-projects ()
   "Clears projects out of the projects variable. This is useful when
 you want to reload a project. After this you need to rerun the
 projmake setup for your file. Either restart the mode or open a file
 of that mode"
   (interactive)
-  (setf projmake-projects nil))
+  (setf projmake-mode/projects nil))
 
-(defun projmake-add-to-projects (prj)
+(defun projmake-mode/add-to-projects (prj)
   "Adds a project to the project list only if that project does not
 already exist. Where existance is indicated by the full path of the
 projmake file."
   (let ((file (projmake-project-file prj)))
-    (if (assoc file projmake-projects)
+    (if (assoc file projmake-mode/projects)
         prj
       (progn
-        (push (cons file prj) projmake-projects)
+        (push (cons file prj) projmake-mode/projects)
         prj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Active Projects
 
-(defun projmake-add-project (&optional file)
+(defun projmake-mode/add-project (&optional file)
   "Adds a project file to bg-build minor mode.  This basically reads
 and evaluates the first Emacs Lisp expression from specified file.
 The expression should evaluate to a bg-build project object."
   (interactive "fProjmake File:")
-  (projmake-log PROJMAKE-DEBUG "loading file %s" file)
+  (projmake-log/debug "loading file %s" file)
   (let ((absfile (expand-file-name file)))
     (cond
      ((not absfile)
-      (projmake-search-load-project))
+      (projmake-discover/search-load-project))
      ((not (and (file-readable-p absfile)
                 (file-regular-p absfile)))
       (error "Specified file is not a regular readable file"))
      (t
-      (let ((prj (projmake-eval-project-file absfile)))
-        (projmake-add-to-projects prj))))))
+      (let ((prj (projmake-discover/eval-project-file absfile)))
+        (projmake-mode/add-to-projects prj))))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Running Builds
-(defvar projmake-processes nil
-  "This is a association list of all currently running build
-processes where the key is the project file and the value is the
-process itself.")
-
-(defun projmake-get-process (project)
-  (let ((file (projmake-project-file project)))
-    (cdr (assoc file projmake-processes))))
-
-(defun projmake-make-process-name (project)
-  (concat "projmake-build["
+(defun projmake-mode/make-process-name (project)
+  (concat "Build Output ["
           (projmake-project-name project) ":"
           (number-to-string
            (projmake-project-build-counter project))
           "]"))
 
-(defun interrupt-existing-and-start-build (process project)
+(defun projmake-mode/build-buffer (project)
+  (process-buffer (projmake-project-process project)))
+
+(defun projmake-mode/interrupt-existing-and-start-build (project)
   "If a build process is running interrupt it and start a new
 one. If it does not exist then simple start a new one."
-  (if (and process
-           (eql 'run (process-status process)))
-      (progn
-        (setf (projmake-project-build-again? project) t)
-        (setf (projmake-project-inturrupted project) t)
+  (let ((process (projmake-project-process project)))
+    (if (and process
+             (eql 'run (process-status process)))
         (interrupt-process process))
-    (projmake-start-build-process project)))
+    (projmake-mode/start-build-process project)))
 
-(defun projmake-build-when (project)
-  "Kick off the project in the correct way. If the
-projmake-build-now! variable interrupt the current build and kick
-off a new build otherwise just mark for rebuild."
-  (let ((process (projmake-get-process project)))
-    (if projmake-build-now!
-        (interrupt-existing-and-start-build process project)
-      (if process
-          (setf (projmake-project-build-again? project) t)
-        (projmake-start-build-process project)))))
-
-(defun projmake-buildable-event ()
+(defun projmake-mode/buildable-event ()
   "buildable event occures (this is
 almost always just a save). It will do the 'rigth thing' for the
 build."
   (interactive)
   (let ((project
-         (projmake-find-project-by-buffer (current-buffer))))
+         (projmake-project/find-by-buffer projmake-mode/projects
+                                          (current-buffer))))
     (if project
-        (if (projmake-project-build? project)
-            (projmake-build-when project)
-          (projmake-log PROJMAKE-INFO
-                        "No related project for buffer %s"
-                        (buffer-file-name (current-buffer))))
-      (projmake-log PROJMAKE-INFO "No related project for buffer %s"
-                    (buffer-file-name (current-buffer))))))
+        (projmake-mode/interrupt-existing-and-start-build project)
+      (projmake-log/info
+       "No related project for buffer %s"
+       (buffer-file-name (current-buffer))))))
 
-(defun projmake-start-build-process (project)
+(defun projmake-mode/start-build-process (project)
   "Start syntax check process."
-  (let* ((process nil)
+  (let* ((build-state (projmake-build-state/make project))
+         (process nil)
          (default-directory (projmake-project-dir project))
          (shell-cmd (projmake-project-shell project))
          (ctx-proc-filter (lambda (proc output)
-                            (projmake-process-filter
-                             project proc output)))
-         (ctx-proc-sentinel (lambda (proc _event)
-                              (projmake-process-sentinel
-                               project proc)))
-         (parse-state (call-projmake-parse-engine-init project)))
-    (setf (projmake-project-parse-engine-state project) parse-state)
-    (condition-case err
+                            (projmake-mode/process-filter
+                             build-state proc output)))
+         (ctx-proc-sentinel (lambda (proc event)
+                              (projmake-mode/process-sentinel
+                               build-state proc event)))
+         (parse-state (projmake-project/parse-engine-init project)))
+    (setf (projmake-build-state-parse-engine-state build-state) parse-state)
+    (projmake-elmm/refresh build-state)
+    (condition-case-unless-debug err
         (progn
           ;; Clean up the project markup up since we are building
           ;; again
-          (projmake-clear-project-output project)
-          (projmake-delete-overlays project)
-          (projmake-banner-building project)
-          (projmake-log PROJMAKE-DEBUG
-                        (concat "starting projmake process (%s) on dir %s "
-                                "with parse engine %s")
-                        shell-cmd default-directory
-                        (projmake-parse-engine-call-name project))
-          (setq process (apply 'start-process-shell-command
-                               (projmake-make-process-name project)
-                               (projmake-make-process-name project)
-                               shell-cmd))
+          (projmake-mode/clear-project-output project)
+          (projmake-banner/building build-state)
+          (projmake-log/debug
+           (concat "starting projmake process (%s) on dir %s "
+                   "with parse engine %s")
+           shell-cmd default-directory
+           (projmake-project/parse-engine-name project))
+
+          (let ((process-name (projmake-mode/make-process-name project)))
+            (setq process (apply 'start-process-shell-command
+                                 process-name
+                                 process-name
+                                 shell-cmd)))
+
+          (setf (projmake-project-process project) process)
           (set-process-sentinel process ctx-proc-sentinel)
           (set-process-filter process ctx-proc-filter)
-          (push (cons (projmake-project-file project) process)
-                projmake-processes)
-          (incf (projmake-project-build-counter project))
-          (setf (projmake-project-is-building? project) t)
-          (projmake-log PROJMAKE-INFO
-                        "started process %d, command=%s, dir=%s"
-                        (process-id process) (process-command process)
-                        default-directory)
+          (cl-incf (projmake-project-build-counter project))
+          (projmake-log/info "started process %d, command=%s, dir=%s"
+                             (process-id process)
+                             (process-command process)
+                             default-directory)
           process)
       (error
        (let* ((err-str
                (format
-                "Failed to launch syntax check process '%s'
+                "Failed to launch build '%s'
 with args %s"
                 (mapconcat 'identity shell-cmd " ")
                 (error-message-string err))))
-         (projmake-log PROJMAKE-ERROR err-str))))))
+         (projmake-log/error err-str))))))
 
-(defun projmake-process-filter (project process output)
+(defun projmake-mode/process-filter (build-state process output)
   "Parse OUTPUT and highlight error lines.
 It's flymake process filter."
+  (projmake-banner/building build-state)
   (let ((source-buffer (process-buffer process)))
-    (projmake-log PROJMAKE-DEBUG
-                  "received %d byte(s) of output from process %d"
-                  (length output)
-                  (process-id process))
+
+    (projmake-log/debug "received %d byte(s) of output from process %d"
+                        (length output)
+                        (process-id process))
+
     (when (buffer-live-p source-buffer)
-      (let ((error-infos
-             (call-projmake-parse-engine-parse-output project output))
-            (project-errors (projmake-project-error-info project)))
-        (when error-infos
-          (setf (projmake-project-error-info project)
-                (append project-errors error-infos))
-          (projmake-highlight-err-lines project error-infos)))
-      (projmake-populate-process-buffer project output))))
+      (let ((these-errors (projmake-build-state/parse-output build-state output)))
+        (when these-errors
+          (projmake-markup/highlight-err-lines
+           (projmake-build-state-project build-state)
+           these-errors)
+          (projmake-elmm/refresh build-state)))
+      (projmake-mode/populate-process-buffer source-buffer  output))))
 
-(defun projmake-populate-process-buffer (project string)
-  (let ((output-buffer (get-buffer-create
-                        (projmake-build-buffer-name project))))
-    (with-current-buffer output-buffer
-      (save-excursion
-        (setf buffer-read-only nil)
-        ;; Insert the text, advancing the process marker.
-        (goto-char (point-max))
-        (insert string)
-        (setf buffer-read-only t)))))
+(defun projmake-mode/populate-process-buffer (output-buffer string)
+  (when projmake-show-build-output-buffer
+    (display-buffer output-buffer))
+  (with-current-buffer output-buffer
+    (save-excursion
+      (setf buffer-read-only nil)
+      ;; Insert the text, advancing the process marker.
+      (goto-char (point-max))
+      (insert string)
+      (setf buffer-read-only t))
+    (let ((window-buffer (get-buffer-window output-buffer)))
+      (when window-buffer
+        (with-selected-window window-buffer)
+        (goto-char (point-max))))))
 
-(defun projmake-process-sentinel (project process)
+(defun projmake-mode/process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
   (when (memq (process-status process) '(signal exit))
-    (let* ((exit-status  (process-exit-status process))
-           (source-buffer (process-buffer process)))
-      (projmake-log PROJMAKE-INFO "process %d exited with code %d"
-                    (process-id process) exit-status)
-      (condition-case err
+    (let ((exit-status  (process-exit-status process))
+          (source-buffer (process-buffer process)))
+
+      (projmake-log/info "Process received event %s for buffer %s"
+                         event
+                         (buffer-name))
+
+      (when (string= "interrupt: 2\n" event)
+        (setf (projmake-build-state-inturrupted build-state) t))
+
+      (projmake-log/info "process %d exited with code %d"
+                         (process-id process) exit-status)
+
+      (condition-case-unless-debug err
           (progn
             (delete-process process)
-            (setf projmake-processes
-                  (assq-delete-all (projmake-project-file project)
-                                   projmake-processes))
-            (projmake-highlight-err-lines
-             project
-             (call-projmake-parse-engine-stop project)))
+            (setf (projmake-project-process
+                   (projmake-build-state-project build-state)) nil)
+            (projmake-markup/highlight-err-lines
+             (projmake-build-state-project build-state)
+             (projmake-build-state/parse-engine-stop build-state))
+            (projmake-elmm/refresh build-state))
         (error
          (let ((err-str
                 (format "Error in process sentinel for buffer %s: %s"
                         source-buffer (error-message-string err))))
-           (projmake-log PROJMAKE-ERROR err-str))))
-      (kill-buffer (process-buffer process))
-      (projmake-post-build exit-status project))))
+           (projmake-log/error err-str))))
+      (projmake-mode/post-build build-state exit-status))))
 
-(defun projmake-clear-project-output (project)
-  (projmake-banner-clear project)
-  (projmake-delete-overlays project)
-  (setf (projmake-project-error-info project) nil)
-  (projmake-erase-build-buffer project))
-
-(defun projmake-post-build (exitcode project)
-  (setf (projmake-project-last-exitcode project) exitcode)
-  (projmake-log PROJMAKE-ERROR "exit code %d" exitcode)
-  (projmake-banner-show project)
-  (cond
-   ((projmake-project-inturrupted project)
-    (setf (projmake-project-inturrupted project) nil))
-   ((= 0 exitcode)
-    (projmake-erase-build-buffer project)))
-
-  (projmake-cleanup-transient-project-data project)
-
-  (projmake-log PROJMAKE-ERROR "%s: %d error(s), %d warning(s)"
-                (buffer-name)
-                (projmake-project-error-count project)
-                (projmake-project-warning-count project))
-
-  (when (projmake-project-build-again? project)
-    (setf (projmake-project-build-again? project) nil)
-    (projmake-build-when project)))
-
-(defun projmake-build-buffer-name (project)
+(defun projmake-mode/clear-project-output (project)
+  (projmake-banner/clear project)
+  (projmake-markup/delete-overlays project)
   (let ((project-name (projmake-project-name project)))
-    (concat "Build Output [" project-name "]")))
+    (projmake-util/do-for-buffers
+     (let ((name (buffer-name (current-buffer))))
+       (when (string-match "Build Output \\[\\([^:]+\\):\\([0-9]+\\)\\]"
+                           name)
+         (let ((proj-name (match-string 1 name))
+               (build (string-to-number (match-string 2 name))))
+           (when (and (string= project-name proj-name)
+                      (< build (projmake-project-build-counter project)))
+             (kill-buffer (current-buffer)))))))))
 
-(defun projmake-erase-build-buffer (project)
-  (let ((build-buffer (get-buffer (projmake-build-buffer-name project))))
-    (when (buffer-live-p build-buffer)
-      (with-current-buffer build-buffer
-        (save-excursion
-          (setf buffer-read-only nil)
-          (erase-buffer)
-          (setf buffer-read-only t))))))
+(defun projmake-mode/post-build (build-state exitcode)
+  (setf (projmake-project-last-exitcode
+         (projmake-build-state-project build-state))
+        exitcode)
+  (setf (projmake-build-state-exitcode build-state) exitcode)
+  (projmake-log/error "exit code %d" exitcode)
+  (projmake-banner/show build-state)
+  (when (= 0 exitcode)
+    (let ((project (projmake-build-state-project build-state)))
+      (projmake-elmm/remove-project-list-buffer project)
+      (projmake-mode/erase-build-buffer project)))
 
+  (projmake-log/info "%s: %d error(s), %d warning(s)"
+                     (buffer-name)
+                     (projmake-build-state-error-count build-state)
+                     (projmake-build-state-warning-count build-state)))
+
+(defun projmake-mode/erase-build-buffer (project)
+  (let ((project-name (projmake-project-name project)))
+    (projmake-util/do-for-buffers
+     (let ((name (buffer-name (current-buffer))))
+       (when (string-match "Build Output \\[\\([^:]+\\):\\([0-9]+\\)\\]"
+                           name)
+         (let ((proj-name (match-string 1 name)))
+           (when (string= project-name proj-name)
+             (kill-buffer (current-buffer)))))))))
 
 (provide 'projmake-mode)

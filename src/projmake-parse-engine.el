@@ -28,10 +28,10 @@
 ;; The function `parse-output` takes the state created by `init` and
 ;; the current output of build command. The function should return a list
 ;; containing the new state of the process at index 1, and a list of
-;; generated error `projmake-error-info` structs at position 2.
+;; generated error `projmake-error` structs at position 2.
 ;;
 ;; The `stop` function takes the last state return by `parse-output` and returns
-;; the final parsed `projmake-error-info` structs. The idea here is taht if
+;; the final parsed `projmake-error` structs. The idea here is taht if
 ;; there are any partial lines or the like the final parsing and cleanup can be
 ;; done.
 (require 'cl-lib)
@@ -43,50 +43,8 @@
   parse-output
   stop)
 
-(cl-defstruct (projmake-error-info)
-  ;; The path to the file either relative to the the project root or absolute
-  file
-  line
-  (char 0)
-  (end-char 0)
-  ;; The line in the compile output that reported this error
-  output-line
-  ;; The type should be a string of either 'e' or 'w'
-  (type "e")
-  ;; The text of the error
-  text)
 
-(defun projmake-parse-engine-call-name (project)
-  "Make it easy to call the current parse engine name"
-  (projmake-parse-engine-name (projmake-project-parse-engine project)))
-
-(defun call-projmake-parse-engine-init (project)
-  "Make it easy to call the current parse engine"
-  (funcall (projmake-parse-engine-init
-            (projmake-project-parse-engine project))))
-
-(defun call-projmake-parse-engine-parse-output (project output)
-  "Helper function to call parse output on the current parse engine"
-  (let* ((engine-state (projmake-project-parse-engine-state project))
-         (parse-engine-parse-output
-          (projmake-parse-engine-parse-output
-           (projmake-project-parse-engine project)))
-         (result (funcall parse-engine-parse-output engine-state output))
-         (new-state (car result))
-         (error-infos (cadr result)))
-    (setf (projmake-project-parse-engine-state project) new-state)
-    error-infos))
-
-(defun call-projmake-parse-engine-stop (project)
-  (let* ((engine-state (projmake-project-parse-engine-state project))
-         (parse-engine-stop
-          (projmake-parse-engine-stop
-           (projmake-project-parse-engine project)))
-         (error-infos (funcall parse-engine-stop engine-state)))
-    (setf (projmake-project-parse-engine-state project) nil)
-    error-infos))
-
-(defun projmake-parse-engine-split-output (residual new-output)
+(defun projmake-parse-engine/split-output (residual new-output)
   "Split OUTPUT into lines.
 Return last one as residual if it does not end with newline char.
 Returns ((LINES) RESIDUAL)."

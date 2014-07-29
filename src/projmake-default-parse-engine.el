@@ -17,51 +17,52 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Error parsing and handling
 (require 'compile)
-(require 'projmake-util)
+(require 'projmake-log)
+(require 'projmake-error)
 (require 'projmake-parse-engine)
 
-(defun projmake-default-parse-engine-make ()
+(defun projmake-default-parse-engine/make ()
   "Build the struct for the default parse engine"
   (make-projmake-parse-engine
    :name "Default single line parse engine"
-   :init  'projmake-default-parse-engine-init
-   :parse-output 'projmake-default-parse-engine-parse-output
-   :stop 'projmake-default-parse-engine-stop))
+   :init  'projmake-default-parse-engine/init
+   :parse-output 'projmake-default-parse-engine/parse-output
+   :stop 'projmake-default-parse-engine/stop))
 
-(defun projmake-default-parse-engine-init ()
+(defun projmake-default-parse-engine/init ()
   "Initialize the engine state. nothing much to do here. Our state is always
 going to be the unparsed remainder."
   "")
 
-(defun projmake-default-parse-engine-parse-output (residual output)
+(defun projmake-default-parse-engine/parse-output (residual output)
   "Split OUTPUT into lines, merge in residual if necessary."
 
-  (let* ((result (projmake-parse-engine-split-output residual output))
+  (let* ((result (projmake-parse-engine/split-output residual output))
          (lines (car result))
          (new-residual (cadr result)))
     (list new-residual
-          (projmake-default-parse-engine--parse-lines lines))))
+          (projmake-default-parse-engine/parse-lines lines))))
 
-(defun projmake-default-parse-engine-stop (residual)
+(defun projmake-default-parse-engine/stop (residual)
   "Parse residual if it's non empty."
-  (let ((lines (car (projmake-parse-engine-split-output residual ""))))
-    (projmake-default-parse-engine--parse-lines lines)))
+  (let ((lines (car (projmake-parse-engine/split-output residual ""))))
+    (projmake-default-parse-engine/parse-lines lines)))
 
-(defun projmake-default-parse-engine--parse-lines (lines)
+(defun projmake-default-parse-engine/parse-lines (lines)
   "Parse error lines"
   (let ((acc '()))
     (while lines
       (let* ((line (car lines))
              (line-err-info
-              (projmake-default-parse-engine--parse-line line)))
+              (projmake-default-parse-engine/parse-line line)))
         (setq lines (cdr lines))
-        (projmake-log PROJMAKE-DEBUG "parsed '%s', %s line-err-info"
-                      line (if line-err-info "got" "no"))
+        (projmake-log/debug "parsed '%s', %s line-err-info"
+                            line (if line-err-info "got" "no"))
         (when line-err-info
           (push line-err-info acc))))
     acc))
 
-(defun projmake-default-parse-engine--import-from-compile-el (original-list)
+(defun projmake-default-parse-engine/import-from-compile-el (original-list)
   "Grab error line patterns from ORIGINAL-LIST in compile.el format.
 Convert it to flymake internal format."
   (let ((result '()))
@@ -86,7 +87,7 @@ Convert it to flymake internal format."
                    col))
                 result))))))
 
-(defvar projmake-err-line-patterns
+(defvar projmake-default-parse-engine/err-line-patterns
   (append
    '(
      ;; MS Visual C++ 6.0
@@ -114,14 +115,14 @@ Convert it to flymake internal format."
      (" *\\(\\[javac\\] *\\)?\\(\\([a-zA-Z]:\\)?[^:(\t\n]+\\)\:\
 \\([0-9]+\\)\:[ \t\n]*\\(.+\\)"
       2 4 nil 5))
-   (projmake-default-parse-engine--import-from-compile-el
+   (projmake-default-parse-engine/import-from-compile-el
     compilation-error-regexp-alist-alist))
   "Patterns for matching error/warning lines.  Each pattern has the form
 \(REGEXP FILE-IDX LINE-IDX COL-IDX ERR-TEXT-IDX).
 Use `projmake-reformat-err-line-patterns-from-compile-el' to add patterns
 from compile.el")
 
-(defun projmake-default-parse-engine--apply-pattern (pattern-list line)
+(defun projmake-default-parse-engine/apply-pattern (pattern-list line)
   "Apply an individual pattern to a single string return the
 error-info struct if successful and nil if not"
   (let ((pattern (car pattern-list)))
@@ -154,23 +155,23 @@ error-info struct if successful and nil if not"
           (when (and err-text (string-match "^[wW]arning" err-text))
             (setq err-type "w"))
 
-          (projmake-log PROJMAKE-DEBUG
-                        (concat  "parse line: file-idx=%s line-idx=%s file=%s "
-                                 "line=%s text=%s")
-                        file-idx line-idx
-                        raw-file-name line-no err-text)
-          (make-projmake-error-info :file raw-file-name
-                                    :line line-no
-                                    :type err-type
-                                    :text err-text))
+          (projmake-log/debug
+           (concat  "parse line: file-idx=%s line-idx=%s file=%s "
+                    "line=%s text=%s")
+           file-idx line-idx
+           raw-file-name line-no err-text)
+          (make-projmake-error :file raw-file-name
+                               :line line-no
+                               :type err-type
+                               :text err-text))
       nil)))
 
-(defun projmake-default-parse-engine--parse-line (line)
+(defun projmake-default-parse-engine/parse-line (line)
   "Parse LINE to see if it is an error or warning.
 Return its components if so, nil otherwise."
   (projmake-find-first
    #'(lambda (pattern-list)
-       (projmake-default-parse-engine--apply-pattern pattern-list line))
-   projmake-err-line-patterns))
+       (projmake-default-parse-engine/apply-pattern pattern-list line))
+   projmake-default-parse-engine/err-line-patterns))
 
 (provide 'projmake-default-parse-engine)

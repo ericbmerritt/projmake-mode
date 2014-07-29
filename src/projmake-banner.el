@@ -17,55 +17,56 @@
 ;; Provides a banner used to display information about the build process
 (require 'projmake-util)
 (require 'projmake-project)
-(require 'projmake-parse-engine)
+(require 'projmake-error)
+(require 'projmake-build-state)
 
-(defun projmake-banner-building (project)
+(defun projmake-banner/building (project)
   "Notify the banner that we are building the project"
-  (projmake-banner--notify project "BUILDING ...."))
+  (projmake-banner/notify project "BUILDING ...."))
 
-(defun projmake-banner-show (project)
+(defun projmake-banner/show (build-state)
   "Show a correct banner based on the details of the project itself"
-  (setf (projmake-project-warning-count project)
-        (projmake-banner--get-err-count project "w"))
-  (setf (projmake-project-error-count project)
-        (projmake-banner--get-err-count project "e"))
+  (setf (projmake-build-state-warning-count build-state)
+        (projmake-banner/get-err-count build-state "w"))
+  (setf (projmake-build-state-error-count build-state)
+        (projmake-banner/get-err-count build-state "e"))
   (cond
-   ((projmake-project-inturrupted project)
-    (projmake-banner--notify project "Inturrupted"))
-   ((not (= 0 (projmake-project-last-exitcode project)))
-    (projmake-banner--notify-failed project))
-   (t (projmake-banner-clear project))))
+   ((projmake-build-state-inturrupted build-state)
+    (projmake-banner/notify build-state "Inturrupted"))
+   ((not (= 0 (projmake-build-state-exitcode build-state)))
+    (projmake-banner/notify-failed build-state))
+   (t (projmake-banner/clear (projmake-build-state-project build-state)))))
 
-(defun projmake-banner-clear (project)
-  (projmake-do-for-project-buffers project
-                                   (setf header-line-format nil)))
+(defun projmake-banner/clear (project)
+  (projmake-project/do-for-project-buffers project
+                                           (setf header-line-format nil)))
 
-(defun projmake-banner--notify-failed (project)
+(defun projmake-banner/notify-failed (build-state)
   ;; Add warning to the top of the file
-  (projmake-banner--notify
-   project
+  (projmake-banner/notify
+   build-state
    (format "R:%d E:%d W:%d BUILD FAILED IN THIS PROJECT"
-           (projmake-project-last-exitcode project)
-           (projmake-project-error-count project)
-           (projmake-project-warning-count project))
+           (projmake-build-state-exitcode build-state)
+           (projmake-build-state-error-count build-state)
+           (projmake-build-state-warning-count build-state))
    t))
 
-(defun projmake-banner--notify (project detail &rest error)
+(defun projmake-banner/notify (build-state detail &rest error)
   ;; Add warning to the top of the file
-  (projmake-do-for-project-buffers project
-                                   (projmake-banner--update-header
-                                    detail error)))
+  (projmake-project/do-for-project-buffers
+   (projmake-build-state-project build-state)
+   (projmake-banner/update-header detail error)))
 
 
-(defun projmake-banner--pad-header-line (string)
+(defun projmake-banner/pad-header-line (string)
   (let* ((size (window-total-width))
          (padding (- size (length string)))
          (pad (+ (length string) padding))
          (line-format (format "%%%ds" (- pad))))
     (format line-format string)))
 
-(defun projmake-banner--update-header (str &rest error)
-  (let ((header-line-string (projmake-banner--pad-header-line str))
+(defun projmake-banner/update-header (str &rest error)
+  (let ((header-line-string (projmake-banner/pad-header-line str))
         (hface (if error
                    'projmake-notify-err
                  'projmake-notify-normal)))
@@ -73,12 +74,12 @@
           (list :propertize header-line-string
                 'face hface))))
 
-(defun projmake-banner--get-err-count (project type)
+(defun projmake-banner/get-err-count (build-state type)
   "Return number of errors of specified TYPE for ERR-INFO-LIST."
-  (let* ((error-info-list (projmake-project-error-info project))
+  (let* ((error-info-list (projmake-build-state-error-info build-state))
          (err-count 0))
     (dolist (err error-info-list)
-      (when (string-equal type (projmake-error-info-type err))
+      (when (string-equal type (projmake-error-type err))
         (setq err-count (+ err-count 1))))
     err-count))
 
