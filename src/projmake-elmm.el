@@ -25,7 +25,7 @@
   "Projmake errors"
   "Major mode for listing Projmake errors."
   (setq tabulated-list-format
-        [("file" 25 nil)
+        [("file" 25 nil :right-align t)
         ("Line" 4 nil :right-align t)
         ("Col" 3 nil :right-align t)
         ("type" 7 nil)

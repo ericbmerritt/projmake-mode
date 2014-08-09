@@ -90,7 +90,8 @@ to be built with command '%s'"
          (prj (projmake-project/make-project
                filename
                :shell shell
-               :parse-engine parse-engine)))
+               :parse-engine parse-engine
+               :file-name-rectifier nil)))
     (projmake-discover/normalize-project prj)
     (projmake-mode/add-to-projects prj)
     prj))
