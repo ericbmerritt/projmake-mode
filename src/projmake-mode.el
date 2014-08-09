@@ -103,6 +103,13 @@ if you don't want to see it.."
   :group 'projmake
   :type 'boolean)
 
+
+;;;###autoload
+(defcustom projmake-file-name-elements-to-display-in-error-buffer 2
+  "The number of file name elements to display in the error buffer. "
+  :group 'projmake
+  :type 'int)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
 ;;;###autoload

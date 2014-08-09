@@ -25,7 +25,7 @@
   "Projmake errors"
   "Major mode for listing Projmake errors."
   (setq tabulated-list-format
-        [("file" 25 nil :right-align t)
+        [("file" 25 nil)
         ("Line" 4 nil :right-align t)
         ("Col" 3 nil :right-align t)
         ("type" 7 nil)
@@ -72,12 +72,19 @@ string with attached text properties."
       (propertize (number-to-string number) 'font-lock-face face)
     ""))
 
+(defvar projmake-file-name-elements-to-display-in-error-buffer)
+(defun projmake-elmm/parse-file-name-for-display (name)
+  (let* ((name-components (last (split-string name "/")
+                                projmake-file-name-elements-to-display-in-error-buffer)))
+    (mapconcat 'identity name-components "/")))
+
 (defun projmake-elmm/error-list-make-entry (error)
   "Make a table cell for the given ERROR.
 
 Return a list with the contents of the table cell."
 
-  (let ((file (projmake-error-file error))
+  (let ((file (projmake-elmm/parse-file-name-for-display
+               (projmake-error-file error)))
         (line (projmake-error-line error))
         (column (projmake-error-char error))
         (type (projmake-error/expand-type error))
