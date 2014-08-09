@@ -31,12 +31,13 @@
   name
   shell
   parse-engine
+  file-name-rectifier
   last-exitcode
   process
   (build-counter 0)
   (build? t))
 
-(cl-defun projmake-project/make-project (file &key name shell parse-engine)
+(cl-defun projmake-project/make-project (file &key name shell parse-engine file-name-rectifier)
   "Creates a project object for projmake-prjoject."
   (let ((dir (file-name-directory file)))
     (make-projmake-project
@@ -54,7 +55,8 @@
                    (split-string shell "[ \n\t]+"))
                   (t
                    (error "Shell command required!")))
-     :parse-engine parse-engine)))
+     :parse-engine parse-engine
+     :file-name-rectifier file-name-rectifier)))
 
 (defun projmake-project/parse-engine-name (project)
   "Make it easy to call the current parse engine name"

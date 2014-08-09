@@ -29,9 +29,13 @@
   (file-name-directory load-file-name))
 
 (defun projmake-util/buffer-for-error (line-error project)
-  (let ((error-file (expand-file-name
-                     (projmake-error-file line-error)
-                     (projmake-project-dir project))))
+  (let* ((file-name (if (projmake-project-file-name-rectifier project)
+                       (funcall (projmake-project-file-name-rectifier project)
+                                (projmake-error-file line-error))
+                     (projmake-error-file line-error)))
+         (error-file (expand-file-name
+                      file-name
+                      (projmake-project-dir project))))
     (projmake-log/debug "Looking for buffer for %s" error-file)
     (let ((buffer (get-file-buffer error-file)))
       (if buffer
