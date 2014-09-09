@@ -385,7 +385,7 @@ It's flymake process filter."
   (projmake-banner/show build-state)
   (when (= 0 exitcode)
     (let ((project (projmake-build-state-project build-state)))
-      (projmake-elmm/remove-project-list-buffer project)
+      (projmake-elmm/remove-project-list-buffer build-state)
       (projmake-mode/erase-build-buffer project)))
 
   (projmake-log/info "%s: %d error(s), %d warning(s)"
