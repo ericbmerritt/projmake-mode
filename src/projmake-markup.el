@@ -39,6 +39,7 @@
 
 (defun projmake-markup/delete-overlays (project)
   "Delete all overlays in the project"
+  (ind-clear-indicators)
   (dolist (ol (projmake-markup/project-overlays project))
     (when ol
       (delete-overlay ol))))
@@ -119,10 +120,12 @@ Perhaps use text from line-error to enhance highlighting."
 (defun projmake-markup/add-tool-tip-overlay (beg-of-line
                                              face
                                              mouse-face)
-  (let ((beg beg-of-line)
-        (end (+ 1 beg-of-line)))
-    (projmake-markup/add-overlay beg end "?"
-                                 face mouse-face)))
+  (ind-create-indicator beg-of-line
+                        :managed t
+                        :relative nil
+                        :fringe 'left-fringe
+                        :bitmap 'exclamation-mark
+                        :face 'fringe))
 
 (defun projmake-markup/add-highlight-overlay (beg
                                               end
