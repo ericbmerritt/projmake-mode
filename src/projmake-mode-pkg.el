@@ -3,7 +3,8 @@
 ;;
 (define-package "projmake-mode" "0.0.10"
   "Project oriented automatic builder and error highlighter, flymake for projects"
-  '((dash "2.6.0")))
+  '((dash "2.6.0")
+    (indicators)))
 
 
 ;;; Local Variables:
