@@ -96,7 +96,7 @@ to . This lets you control displaying that buffer (though it still exists)"
   :type 'boolean)
 
 ;;;###autoload
-(defcustom projmake-show-error-list-buffer t
+(defcustom projmake-show-error-list-buffer nil
   "Usually its nice to see the error-list buffer, but sometimes it gets
 annoying. This lets you disable displaying that buffer (though it still exists)
 if you don't want to see it.."
