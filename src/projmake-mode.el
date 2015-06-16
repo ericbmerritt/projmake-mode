@@ -103,12 +103,18 @@ if you don't want to see it.."
   :group 'projmake
   :type 'boolean)
 
-
 ;;;###autoload
 (defcustom projmake-file-name-elements-to-display-in-error-buffer 2
   "The number of file name elements to display in the error buffer. "
   :group 'projmake
   :type 'int)
+
+;;;###autoload
+(defcustom projmake-highlight-error-lines t
+  "Indicates whether projmake mode should highlight error lines and add them to
+the fringe. Sometimes this conflicts with other highlighters like merlin"
+  :group 'projmake
+  :type 'boolean)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Environment Adjustment
@@ -308,7 +314,7 @@ It's flymake process filter."
 
     (when (buffer-live-p source-buffer)
       (let ((these-errors (projmake-build-state/parse-output build-state output)))
-        (when these-errors
+        (when (and these-errors projmake-highlight-error-lines)
           (projmake-markup/highlight-err-lines
            (projmake-build-state-project build-state)
            these-errors)
@@ -351,9 +357,10 @@ It's flymake process filter."
             (delete-process process)
             (setf (projmake-project-process
                    (projmake-build-state-project build-state)) nil)
-            (projmake-markup/highlight-err-lines
-             (projmake-build-state-project build-state)
-             (projmake-build-state/parse-engine-stop build-state))
+            (when projmake-highlight-error-lines
+              (projmake-markup/highlight-err-lines
+               (projmake-build-state-project build-state)
+               (projmake-build-state/parse-engine-stop build-state)))
             (projmake-elmm/refresh build-state))
         (error
          (let ((err-str
@@ -364,7 +371,7 @@ It's flymake process filter."
 
 (defun projmake-mode/clear-project-output (project)
   (projmake-banner/clear project)
-  (projmake-markup/delete-overlays project)
+  (when projmake-highlight-error-lines (projmake-markup/delete-overlays project))
   (let ((project-name (projmake-project-name project)))
     (projmake-util/do-for-buffers
      (let ((name (buffer-name (current-buffer))))
