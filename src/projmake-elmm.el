@@ -55,8 +55,10 @@
   (projmake-build-state-project build-state))
 
 (defun projmake-elmm/remove-project-list-buffer (build-state)
-  (let* ((buffer (projmake-elmm/get-project-list-buffer build-state)))
-    (delete-window (get-buffer-window buffer))))
+  (let* ((buffer (projmake-elmm/get-project-list-buffer build-state))
+         (error-window (get-buffer-window buffer)))
+    (when error-window
+      (delete-window error-window))))
 
 (defvar-local projmake-elmm/source-build-state nil
   "The currently displaying build state")
