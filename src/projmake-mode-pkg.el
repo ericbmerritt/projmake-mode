@@ -3,7 +3,7 @@
 ;;
 (define-package "projmake-mode" "0.0.11"
   "Project oriented automatic builder and error highlighter, flymake for projects"
-  '((dash "2.6.0")
+  '((dash "20150611.922")
     (indicators "20130217.1405")))
 
 
