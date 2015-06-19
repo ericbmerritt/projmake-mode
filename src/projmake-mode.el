@@ -199,6 +199,46 @@ projmake file."
         prj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Build buffer
+
+(defun projmake-mode/make-build-buffer-name (project)
+  (format "%s Build Output"
+          (projmake-project-name project)))
+
+(defun projmake-mode/build-buffer (project)
+  (get-buffer-create (projmake-mode/make-build-buffer-name project)))
+
+(defun projmake-mode/buffer-clear (project)
+  (with-current-buffer (projmake-mode/build-buffer project)
+    (save-excursion
+      (setf buffer-read-only nil)
+      ;; Insert the text, advancing the process marker.
+      (erase-buffer)
+      (setf buffer-read-only t))))
+
+(defun projmake-mode/buffer-write (project output)
+  (with-current-buffer (projmake-mode/build-buffer project)
+    (save-excursion
+      (setf buffer-read-only nil)
+      ;; Insert the text, advancing the process marker.
+      (goto-char (point-max))
+      (insert output)
+      (setf buffer-read-only t))))
+
+(defun projmake-mode/buffer-show-latest (project)
+  (let* ((build-buffer (projmake-mode/build-buffer project))
+        (window-buffer (get-buffer-window build-buffer)))
+    (when projmake-show-build-output-buffer build-buffer
+          (display-buffer build-buffer)
+          (when window-buffer
+            (with-selected-window window-buffer)
+            (goto-char (point-max))))))
+
+(defun projmake-mode/buffer-kill (project)
+  (let ((build-buffer (projmake-mode/build-buffer project)))
+    (kill-buffer build-buffer)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Active Projects
 
 (defun projmake-mode/add-project (&optional file)
@@ -219,14 +259,9 @@ The expression should evaluate to a bg-build project object."
         (projmake-mode/add-to-projects prj))))))
 
 (defun projmake-mode/make-process-name (project)
-  (concat "Build Output ["
-          (projmake-project-name project) ":"
-          (number-to-string
-           (projmake-project-build-counter project))
-          "]"))
-
-(defun projmake-mode/build-buffer (project)
-  (process-buffer (projmake-project-process project)))
+  (format "%s Build Process [%d]"
+          (projmake-project-name project)
+           (projmake-project-build-counter project)))
 
 (defun projmake-mode/interrupt-existing-and-start-build (project)
   "If a build process is running interrupt it and start a new
@@ -259,7 +294,7 @@ build."
          (shell-cmd (projmake-project-shell project))
          (ctx-proc-filter (lambda (proc output)
                             (projmake-mode/process-filter
-                             build-state proc output)))
+                             project build-state proc output)))
          (ctx-proc-sentinel (lambda (proc event)
                               (projmake-mode/process-sentinel
                                build-state proc event)))
@@ -302,7 +337,7 @@ with args %s"
                 (error-message-string err))))
          (projmake-log/error err-str))))))
 
-(defun projmake-mode/process-filter (build-state process output)
+(defun projmake-mode/process-filter (project build-state process output)
   "Parse OUTPUT and highlight error lines.
 It's flymake process filter."
   (projmake-banner/building build-state)
@@ -312,29 +347,17 @@ It's flymake process filter."
                         (length output)
                         (process-id process))
 
-    (when (buffer-live-p source-buffer)
-      (let ((these-errors (projmake-build-state/parse-output build-state output)))
-        (when (and these-errors projmake-highlight-error-lines)
-          (projmake-markup/highlight-err-lines
-           (projmake-build-state-project build-state)
-           these-errors)
-          (projmake-elmm/refresh build-state)))
-      (projmake-mode/populate-process-buffer source-buffer  output))))
+    (let ((these-errors (projmake-build-state/parse-output build-state output)))
+      (when (and these-errors projmake-highlight-error-lines)
+        (projmake-markup/highlight-err-lines
+         (projmake-build-state-project build-state)
+         these-errors)
+        (projmake-elmm/refresh build-state)))
+    (projmake-mode/populate-process-buffer project output)))
 
-(defun projmake-mode/populate-process-buffer (output-buffer string)
-  (when projmake-show-build-output-buffer
-    (display-buffer output-buffer))
-  (with-current-buffer output-buffer
-    (save-excursion
-      (setf buffer-read-only nil)
-      ;; Insert the text, advancing the process marker.
-      (goto-char (point-max))
-      (insert string)
-      (setf buffer-read-only t))
-    (let ((window-buffer (get-buffer-window output-buffer)))
-      (when window-buffer
-        (with-selected-window window-buffer)
-        (goto-char (point-max))))))
+(defun projmake-mode/populate-process-buffer (project output)
+  (projmake-mode/buffer-write project output)
+  (projmake-mode/buffer-show-latest project))
 
 (defun projmake-mode/process-sentinel (build-state process event)
   "Sentinel for syntax check buffers."
@@ -367,21 +390,13 @@ It's flymake process filter."
                 (format "Error in process sentinel for buffer %s: %s"
                         source-buffer (error-message-string err))))
            (projmake-log/error err-str))))
+      (kill-buffer (process-buffer process))
       (projmake-mode/post-build build-state exit-status))))
 
 (defun projmake-mode/clear-project-output (project)
   (projmake-banner/clear project)
   (when projmake-highlight-error-lines (projmake-markup/delete-overlays project))
-  (let ((project-name (projmake-project-name project)))
-    (projmake-util/do-for-buffers
-     (let ((name (buffer-name (current-buffer))))
-       (when (string-match "Build Output \\[\\([^:]+\\):\\([0-9]+\\)\\]"
-                           name)
-         (let ((proj-name (match-string 1 name))
-               (build (string-to-number (match-string 2 name))))
-           (when (and (string= project-name proj-name)
-                      (< build (projmake-project-build-counter project)))
-             (kill-buffer (current-buffer)))))))))
+  (projmake-mode/buffer-clear project))
 
 (defun projmake-mode/post-build (build-state exitcode)
   (setf (projmake-project-last-exitcode
@@ -393,12 +408,7 @@ It's flymake process filter."
   (when (= 0 exitcode)
     (let ((project (projmake-build-state-project build-state)))
       (projmake-elmm/remove-project-list-buffer build-state)
-      (projmake-mode/erase-build-buffer project)))
-
-  (projmake-log/info "%s: %d error(s), %d warning(s)"
-                     (buffer-name)
-                     (projmake-build-state-error-count build-state)
-                     (projmake-build-state-warning-count build-state)))
+      (projmake-mode/buffer-kill project))))
 
 (defun projmake-mode/erase-build-buffer (project)
   (let ((project-name (projmake-project-name project)))
