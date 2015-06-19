@@ -1,10 +1,10 @@
 ;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2012 Eric Merritt
 ;;
-(define-package "projmake-mode" "0.0.10"
+(define-package "projmake-mode" "0.0.11"
   "Project oriented automatic builder and error highlighter, flymake for projects"
   '((dash "2.6.0")
-    (indicators)))
+    (indicators "20130217.1405")))
 
 
 ;;; Local Variables:
