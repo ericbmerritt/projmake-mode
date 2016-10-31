@@ -1,4 +1,4 @@
-;; -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
+;;; projmake-mode.el --- run build system for project -*- coding: utf-8; lexical-binding: t; fill-column: 80 -*-
 ;; Copyright (C) 2007-2008 Vesa Karvonen
 ;; Copyright (C) 2012 Eric Merritt
 ;;
